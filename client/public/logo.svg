@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" aria-label="Cōntry logo">
+  <defs>
+    <clipPath id="globe-clip">
+      <circle cx="128" cy="150" r="45"/>
+    </clipPath>
+  </defs>
+
+  <g color="#F3E7C9" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Macron -->
+    <rect x="88" y="53" width="80" height="16" rx="4" fill="currentColor" stroke="none"/>
+
+    <!-- Outer O ring -->
+    <circle cx="128" cy="150" r="58" stroke-width="16"/>
+
+    <!-- Center dot -->
+    <circle cx="128" cy="150" r="25" fill="currentColor" stroke="none"/>
+  </g>
+</svg>

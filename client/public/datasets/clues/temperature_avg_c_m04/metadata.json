@@ -1,0 +1,14 @@
+{
+  "id": "temperature_avg_c_m04",
+  "label": "Avg Temperature (Month 04)",
+  "description": "The country's average temperature for the current month.",
+  "type": "numeric",
+  "comparator": "higher_lower",
+  "source": "builtin",
+  "dataset_id": "temperature_avg_c_m04",
+  "unit": {
+    "kind": "celsius",
+    "symbol": "degC"
+  },
+  "icon": "thermometer"
+}

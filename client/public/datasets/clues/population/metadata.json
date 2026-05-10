@@ -1,0 +1,13 @@
+{
+  "id": "population",
+  "label": "Population",
+  "description": "The country's total population.",
+  "type": "numeric",
+  "comparator": "higher_lower",
+  "source": "builtin",
+  "dataset_id": "population",
+  "unit": {
+    "kind": "people"
+  },
+  "icon": "users"
+}

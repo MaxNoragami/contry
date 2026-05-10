@@ -1,0 +1,17 @@
+{
+  "id": "continent",
+  "label": "Continent",
+  "type": "categorical",
+  "comparator": "exact",
+  "source": "custom",
+  "dataset_id": "continent",
+  "categories": [
+    "Africa",
+    "Asia",
+    "Europe",
+    "North America",
+    "South America",
+    "Oceania"
+  ],
+  "icon": ""
+}

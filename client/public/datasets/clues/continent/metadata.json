@@ -1,0 +1,18 @@
+{
+  "id": "continent",
+  "label": "Continent",
+  "description": "The continent where the country is located.",
+  "type": "categorical",
+  "comparator": "exact",
+  "source": "builtin",
+  "dataset_id": "continent",
+  "categories": [
+    "Africa",
+    "Asia",
+    "Europe",
+    "North America",
+    "South America",
+    "Oceania"
+  ],
+  "icon": "compass"
+}
