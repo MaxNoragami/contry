@@ -1,0 +1,14 @@
+{
+  "id": "hemisphere",
+  "label": "Hemisphere",
+  "description": "Whether the country is in the Northern or Southern Hemisphere.",
+  "type": "computed",
+  "comparator": "exact",
+  "source": "builtin",
+  "compute": "hemisphere",
+  "categories": [
+    "NORTHERN",
+    "SOUTHERN"
+  ],
+  "icon": "globe"
+}

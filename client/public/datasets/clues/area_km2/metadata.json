@@ -1,0 +1,14 @@
+{
+  "id": "area_km2",
+  "label": "Area",
+  "description": "The country's total land area.",
+  "type": "numeric",
+  "comparator": "higher_lower",
+  "source": "builtin",
+  "dataset_id": "area_km2",
+  "unit": {
+    "kind": "km2",
+    "symbol": "km²"
+  },
+  "icon": "land-plot"
+}

@@ -1,0 +1,15 @@
+.git/
+.idea/
+.vscode/
+**/bin/
+**/obj/
+**/TestResults/
+**/node_modules/
+**/*.user
+**/*.suo
+**/*.swp
+client/dist/
+client/dist-ssr/
+server/tests/
+.env.dev
+.env.prod

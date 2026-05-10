@@ -1,0 +1,13 @@
+{
+  "id": "co2_kt_per_year",
+  "label": "Emitted CO2",
+  "type": "numeric",
+  "comparator": "higher_lower",
+  "source": "custom",
+  "dataset_id": "co2_kt_per_year",
+  "unit": {
+    "kind": "kt_per_year",
+    "symbol": "kt/yr"
+  },
+  "icon": ""
+}

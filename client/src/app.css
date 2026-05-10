@@ -1,0 +1,274 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
+
+/* ── Design tokens ────────────────────────────────── */
+
+:root {
+  --bg: #14110f;
+  --bg-soft: #1f1b19;
+  --panel: #1d2021;
+  --panel-2: #252a2b;
+  --panel-3: #2b3031;
+  --panel-soft: #232728;
+  --text: #ebdbb2;
+  --muted: #a89984;
+  --border: #3c3836;
+  --border-strong: #504945;
+  --accent: #d79921;
+  --ok: #98971a;
+  --warn: #d79921;
+  --bad: #cc241d;
+  --info: #458588;
+  --overlay: rgba(0, 0, 0, 0.6);
+  --shadow-strong: 0 -4px 24px rgba(0, 0, 0, 0.4);
+  --shadow-lift: 0 8px 20px rgba(0, 0, 0, 0.25);
+  --hover-soft: rgba(255, 255, 255, 0.05);
+  --hover-strong: rgba(255, 255, 255, 0.1);
+  --field-bg: #3c3836;
+  --field-border: #504945;
+  --field-focus-bg: rgba(131, 165, 152, 0.1);
+  --chip-bg: #fbf1c7;
+  --chip-fg: #282828;
+  --ring-track: #3c3836;
+  --tooltip-bg: rgba(251, 241, 199, 0.95);
+  --tooltip-text: #282828;
+  --inset-soft: rgba(255, 255, 255, 0.03);
+  --inset-dark: rgba(0, 0, 0, 0.08);
+
+  --island-bg: rgba(27, 31, 32, 0.88);
+  --island-border: rgba(60, 56, 54, 0.6);
+  --island-radius: 14px;
+  --island-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+
+  --gap: 6px;
+}
+
+:root[data-theme='light'] {
+  --bg: #f2e5bc;
+  --bg-soft: #f9f5d7;
+  --panel: #fbf1c7;
+  --panel-2: #f2e5bc;
+  --panel-3: #ebdbb2;
+  --panel-soft: #e6d6ad;
+  --text: #3c3836;
+  --muted: #7c6f64;
+  --border: #d5c4a1;
+  --border-strong: #bdae93;
+  --accent: #b57614;
+  --ok: #79740e;
+  --warn: #b57614;
+  --bad: #9d0006;
+  --info: #076678;
+  --overlay: rgba(60, 56, 54, 0.42);
+  --shadow-strong: 0 -4px 24px rgba(60, 56, 54, 0.16);
+  --shadow-lift: 0 8px 20px rgba(60, 56, 54, 0.16);
+  --hover-soft: rgba(60, 56, 54, 0.06);
+  --hover-strong: rgba(60, 56, 54, 0.1);
+  --field-bg: #f2e5bc;
+  --field-border: #d5c4a1;
+  --field-focus-bg: rgba(7, 102, 120, 0.08);
+  --chip-bg: #3c3836;
+  --chip-fg: #fbf1c7;
+  --ring-track: #d5c4a1;
+  --tooltip-bg: rgba(60, 56, 54, 0.94);
+  --tooltip-text: #fbf1c7;
+  --inset-soft: rgba(60, 56, 54, 0.05);
+  --inset-dark: rgba(60, 56, 54, 0.1);
+
+  --island-bg: rgba(251, 241, 199, 0.9);
+  --island-border: rgba(213, 196, 161, 0.85);
+  --island-shadow: 0 6px 24px rgba(60, 56, 54, 0.12);
+}
+
+/* ── Reset ────────────────────────────────────────── */
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background-color: var(--bg);
+}
+
+body {
+  font-family: 'Manrope', 'Noto Sans', sans-serif;
+  background: radial-gradient(circle at 20% 0%, var(--bg-soft) 0%, var(--bg) 45%);
+  color: var(--text);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── App shell ────────────────────────────────────── */
+
+#app {
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  padding: var(--gap);
+}
+
+
+
+/* ── Island base class ────────────────────────────── */
+
+.island {
+  background: var(--island-bg);
+  border: 1px solid var(--island-border);
+  border-radius: var(--island-radius);
+  box-shadow: var(--island-shadow);
+}
+
+/* ── Layout shell ─────────────────────────────────── */
+
+.app-shell {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  gap: var(--gap);
+  min-height: 0;
+  min-width: 0;
+}
+
+/* ── SR-only utility ──────────────────────────────── */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+/* ──────────────────────────────────────────────────── */
+/* PORTRAIT / MOBILE (default — single column)         */
+/* ──────────────────────────────────────────────────── */
+
+.app-shell {
+  grid-template-areas:
+    "header"
+    "clues"
+    "guesses"
+    "search";
+  grid-template-rows: auto auto 1fr auto;
+  grid-template-columns: 1fr;
+}
+
+.area-header  { grid-area: header; }
+.area-clues   { grid-area: clues; }
+.area-guesses { grid-area: guesses; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: var(--gap); }
+.area-map     { grid-area: map; display: none; }
+.area-search  { grid-area: search; }
+
+/* ──────────────────────────────────────────────────── */
+/* DESKTOP / LANDSCAPE (≥768px, landscape)             */
+/* ──────────────────────────────────────────────────── */
+
+@media (min-width: 768px) and (orientation: landscape) {
+  :root {
+    --gap: 8px;
+  }
+
+  #app {
+    padding: var(--gap);
+  }
+
+  .app-shell {
+    grid-template-areas:
+      "header  header"
+      "clues   map"
+      "guesses map"
+      "search  search";
+    grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
+    grid-template-rows: auto auto 1fr auto;
+  }
+
+  .area-map {
+    display: block;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* On wide screens, keep header & search bar compact — don't stretch full width */
+  .area-header > *,
+  .area-search > * {
+    max-width: 100%;
+  }
+}
+
+/* ──────────────────────────────────────────────────── */
+/* SMALL-HEIGHT LANDSCAPE (≤500px height, landscape)   */
+/* ──────────────────────────────────────────────────── */
+
+@media (min-width: 768px) and (orientation: landscape) and (max-height: 500px) {
+  :root {
+    --gap: 4px;
+  }
+
+  #app {
+    padding: var(--gap);
+  }
+
+  .app-shell {
+    grid-template-areas:
+      "clues   header"
+      "guesses map"
+      "guesses search";
+    grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
+    grid-template-rows: auto 1fr auto;
+  }
+
+  .area-map {
+    display: block;
+    min-height: 0;
+    overflow: hidden;
+  }
+}
+
+/* ──────────────────────────────────────────────────── */
+/* LARGE DESKTOP (≥1200px)                             */
+/* ──────────────────────────────────────────────────── */
+
+@media (min-width: 1200px) and (orientation: landscape) {
+  :root {
+    --gap: 8px;
+  }
+
+  #app {
+    padding: 12px;
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+
+  /* Only cap header & search bar so buttons don't drift to screen edges */
+  .area-header > *,
+  .area-search > * {
+    max-width: clamp(600px, 65vw, 1000px);
+    margin-inline: auto;
+  }
+}
+
+/* ── Map island styling ───────────────────────────── */
+
+.map-island {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  padding: 4px;
+}
