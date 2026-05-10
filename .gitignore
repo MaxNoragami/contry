@@ -148,3 +148,8 @@ ui-*.md
 ui-*.png
 playwright-report/
 test-results/
+
+# Root environment files
+**/**/.env
+**/**/.env.*
+!.env.example
