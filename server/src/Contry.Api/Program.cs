@@ -1,21 +1,114 @@
 using System.Text;
+using Contry.Api.Common.Errors;
+using Contry.Api.Common.OpenApi;
+using Contry.Api.Features.Auth;
+using Contry.Infrastructure;
+using Contry.Infrastructure.Configuration;
+using Contry.Infrastructure.Persistence;
+using FluentValidation;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Microsoft.OpenApi;
 
 LoadRootEnvironmentFile(args);
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+builder.Services.AddContryInfrastructure(builder.Configuration);
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("Client", policyBuilder =>
+    {
+        var corsOptions = builder.Configuration.GetSection(CorsOptions.SectionName).Get<CorsOptions>() ?? new CorsOptions();
+
+        if (string.IsNullOrWhiteSpace(corsOptions.AllowedOriginsCsv))
+        {
+            corsOptions.AllowedOriginsCsv = builder.Configuration["CORS_ALLOWED_ORIGINS"] ?? string.Empty;
+        }
+
+        var allowedOrigins = corsOptions.GetAllowedOrigins();
+
+        if (allowedOrigins.Length > 0)
+        {
+            policyBuilder.WithOrigins(allowedOrigins);
+        }
+
+        policyBuilder.AllowAnyHeader();
+        policyBuilder.AllowAnyMethod();
+        policyBuilder.AllowCredentials();
+    });
+});
+
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "Contry API",
+        Version = "v1",
+        Description = "Cookie-first auth API for the Contry backend. Login is performed through /sessions, and unsafe cookie-authenticated requests require X-XSRF-TOKEN."
+    });
+
+    options.AddSecurityDefinition("xsrf", new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.ApiKey,
+        In = ParameterLocation.Header,
+        Name = "X-XSRF-TOKEN",
+        Description = "Signed XSRF token returned by GET /xsrf and required for unsafe cookie-authenticated requests."
+    });
+
+    options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecuritySchemeReference("xsrf")
+        {
+        }] = []
+    });
+    options.OperationFilter<XsrfOperationFilter>();
+});
 
 var app = builder.Build();
+
+app.UseProblemDetailsExceptionMiddleware();
+
+await EnsureDatabaseCreatedAsync(app.Services);
 
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    var swaggerIndexPath = Path.Combine(app.Environment.ContentRootPath, "Swagger", "index.html");
+    app.Use(async (httpContext, next) =>
+    {
+        if (httpContext.Request.Path == "/swagger" || httpContext.Request.Path == "/swagger/")
+        {
+            httpContext.Response.Redirect("/swagger/index.html");
+            return;
+        }
+
+        if (httpContext.Request.Path == "/swagger/index.html")
+        {
+            httpContext.Response.ContentType = "text/html; charset=utf-8";
+            await httpContext.Response.SendFileAsync(swaggerIndexPath);
+            return;
+        }
+
+        await next();
+    });
+
+    app.UseSwaggerUI(options =>
+    {
+        options.EnablePersistAuthorization();
+        options.Interceptors.RequestInterceptorFunction = "function (req) { const method = (req.method || '').toUpperCase(); const needsXsrf = ['POST','PUT','PATCH','DELETE'].includes(method); if (!needsXsrf) { return req; } const authState = window.ui && window.ui.getState ? window.ui.getState().get('auth') : null; const authorized = authState && authState.get ? authState.get('authorized') : null; const xsrf = authorized && authorized.get ? authorized.get('xsrf') : null; const authValue = xsrf && xsrf.get ? xsrf.get('value') : null; const storedValue = window.localStorage.getItem('contry.swagger.xsrf'); const value = authValue || storedValue; if (value) { req.headers = req.headers || {}; req.headers['X-XSRF-TOKEN'] = value; } return req; }";
+    });
 }
 
+app.UseStaticFiles();
 app.UseHttpsRedirection();
+app.UseCors("Client");
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapGet("/", () => TypedResults.Ok(new
 {
@@ -29,7 +122,16 @@ app.MapGet("/health", () => TypedResults.Ok(new
     status = "healthy"
 }));
 
+app.MapAuthEndpoints();
+
 app.Run();
+
+static async Task EnsureDatabaseCreatedAsync(IServiceProvider services)
+{
+    using var scope = services.CreateScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<ContryDbContext>();
+    await dbContext.Database.EnsureCreatedAsync();
+}
 
 static void LoadRootEnvironmentFile(string[] args)
 {
