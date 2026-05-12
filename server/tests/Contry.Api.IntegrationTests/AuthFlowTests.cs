@@ -102,6 +102,60 @@ public sealed class AuthFlowTests(TestWebApplicationFactory factory) : IClassFix
     }
 
     [Fact]
+    public async Task UnsafeProtectedEndpoint_MissingXsrf_ReturnsBadRequestBeforeAuth()
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+
+        var registerResponse = await client.PostAsJsonAsync("/users", new RegisterUserRequest("xsrf-first", "xsrf-first@example.com", "Password123!"));
+        Assert.Equal(HttpStatusCode.Created, registerResponse.StatusCode);
+        var cookies = ParseCookies(registerResponse);
+
+        var refreshOnlyCookies = new Dictionary<string, string>
+        {
+            ["contry_refresh"] = cookies["contry_refresh"]
+        };
+
+        var request = CreateRequest(HttpMethod.Post, "/test-records", refreshOnlyCookies);
+        request.Content = JsonContent.Create(new CreateTestRecordRequest("demo", "xsrf should be checked first"));
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = (await response.Content.ReadFromJsonAsync<ProblemResponse>())!;
+        Assert.Equal("/problems/security/missing-xsrf-token", problem.Type);
+        Assert.Equal(400, problem.Status);
+    }
+
+    [Fact]
+    public async Task UnsafeProtectedEndpoint_WithXsrfButNoAccess_ReturnsUnauthorizedAfterXsrfCheck()
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+
+        var registerResponse = await client.PostAsJsonAsync("/users", new RegisterUserRequest("xsrf-auth-order", "xsrf-auth-order@example.com", "Password123!"));
+        Assert.Equal(HttpStatusCode.Created, registerResponse.StatusCode);
+        var cookies = ParseCookies(registerResponse);
+
+        var xsrfResponse = await client.SendAsync(CreateRequest(HttpMethod.Get, "/xsrf", cookies));
+        Assert.Equal(HttpStatusCode.OK, xsrfResponse.StatusCode);
+        var xsrf = (await xsrfResponse.Content.ReadFromJsonAsync<XsrfTokenResponse>())!;
+
+        var refreshOnlyCookies = new Dictionary<string, string>
+        {
+            ["contry_refresh"] = cookies["contry_refresh"]
+        };
+
+        var request = CreateRequest(HttpMethod.Post, "/test-records", refreshOnlyCookies, xsrf.Token);
+        request.Content = JsonContent.Create(new CreateTestRecordRequest("demo", "auth should fail after xsrf succeeds"));
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var problem = (await response.Content.ReadFromJsonAsync<ProblemResponse>())!;
+        Assert.Equal("/problems/auth/invalid-access-token", problem.Type);
+        Assert.Equal(401, problem.Status);
+    }
+
+    [Fact]
     public async Task InvalidCredentials_ReturnsUniformProblemDetails()
     {
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });

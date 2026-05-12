@@ -1,10 +1,5 @@
 using Contry.Api.Common.EndpointFilters;
-using Contry.Api.Common.Security;
-using Contry.Application.Auth;
-using Contry.Application.Errors;
-using Contry.Infrastructure.Authentication;
-using Contry.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
+using Contry.Api.Features.Auth.Handlers;
 
 namespace Contry.Api.Features.Auth;
 
@@ -13,7 +8,7 @@ public static class AuthEndpoints
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
         var users = app.MapGroup("/users").WithTags("Auth");
-        users.MapPost(string.Empty, RegisterUserAsync)
+        users.MapPost(string.Empty, RegisterUserHandler.HandleAsync)
             .WithValidation<RegisterUserRequest>()
             .WithName("RegisterUser")
             .WithSummary("Register a new user account.")
@@ -22,7 +17,7 @@ public static class AuthEndpoints
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status409Conflict);
 
-        users.MapGet("/me", GetCurrentUserAsync)
+        users.MapGet("/me", GetCurrentUserHandler.HandleAsync)
             .RequireAuthorization()
             .WithName("GetCurrentUser")
             .WithSummary("Get the authenticated user profile.")
@@ -31,7 +26,7 @@ public static class AuthEndpoints
             .Produces(StatusCodes.Status401Unauthorized);
 
         var sessions = app.MapGroup("/sessions").WithTags("Auth");
-        sessions.MapPost(string.Empty, CreateSessionAsync)
+        sessions.MapPost(string.Empty, CreateSessionHandler.HandleAsync)
             .WithValidation<CreateSessionRequest>()
             .WithName("CreateSession")
             .WithSummary("Create a login session.")
@@ -40,7 +35,7 @@ public static class AuthEndpoints
             .ProducesValidationProblem()
             .Produces(StatusCodes.Status401Unauthorized);
 
-        sessions.MapDelete("/current", DeleteCurrentSessionAsync)
+        sessions.MapDelete("/current", DeleteCurrentSessionHandler.HandleAsync)
             .RequireXsrf()
             .WithName("DeleteCurrentSession")
             .WithSummary("Destroy the current login session.")
@@ -49,7 +44,7 @@ public static class AuthEndpoints
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);
 
-        app.MapPost("/tokens/refresh", RefreshSessionAsync)
+        app.MapPost("/tokens/refresh", RefreshSessionHandler.HandleAsync)
             .WithTags("Auth")
             .RequireXsrf()
             .WithName("RefreshSession")
@@ -59,7 +54,7 @@ public static class AuthEndpoints
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);
 
-        app.MapGet("/xsrf", GetXsrfTokenAsync)
+        app.MapGet("/xsrf", GetXsrfTokenHandler.HandleAsync)
             .WithTags("Auth")
             .WithName("GetXsrfToken")
             .WithSummary("Mint an XSRF token for the current refresh-session family.")
@@ -68,108 +63,5 @@ public static class AuthEndpoints
             .Produces(StatusCodes.Status401Unauthorized);
 
         return app;
-    }
-
-    private static async Task<IResult> RegisterUserAsync(
-        RegisterUserRequest request,
-        AuthSessionService authSessionService,
-        AuthCookieService authCookieService,
-        HttpContext httpContext,
-        CancellationToken cancellationToken)
-    {
-        var (user, session) = await authSessionService.RegisterUserAsync(request.Username, request.Email, request.Password, cancellationToken);
-        WriteCookies(authCookieService, httpContext, session);
-        return Results.Created($"/users/{user.Id}", new AuthSessionResponse(UserResponse.FromUser(user), session.AccessTokenExpiresAtUtc, session.RefreshTokenExpiresAtUtc));
-    }
-
-    private static async Task<IResult> CreateSessionAsync(
-        CreateSessionRequest request,
-        AuthSessionService authSessionService,
-        AuthCookieService authCookieService,
-        HttpContext httpContext,
-        CancellationToken cancellationToken)
-    {
-        var (user, session) = await authSessionService.CreateSessionAsync(request.Credential, request.Password, cancellationToken);
-        WriteCookies(authCookieService, httpContext, session);
-        return Results.Ok(new AuthSessionResponse(UserResponse.FromUser(user), session.AccessTokenExpiresAtUtc, session.RefreshTokenExpiresAtUtc));
-    }
-
-    private static async Task<IResult> DeleteCurrentSessionAsync(
-        HttpContext httpContext,
-        AuthSessionService authSessionService,
-        AuthCookieService authCookieService,
-        CancellationToken cancellationToken)
-    {
-        if (!httpContext.Request.Cookies.TryGetValue(authCookieService.RefreshCookieName, out var refreshToken) || string.IsNullOrWhiteSpace(refreshToken))
-        {
-            authCookieService.ClearAuthCookies(httpContext.Response);
-            return Results.NoContent();
-        }
-
-        await authSessionService.RevokeCurrentSessionAsync(refreshToken, cancellationToken);
-        authCookieService.ClearAuthCookies(httpContext.Response);
-        return Results.NoContent();
-    }
-
-    private static async Task<IResult> RefreshSessionAsync(
-        HttpContext httpContext,
-        AuthSessionService authSessionService,
-        AuthCookieService authCookieService,
-        CancellationToken cancellationToken)
-    {
-        if (!httpContext.Request.Cookies.TryGetValue(authCookieService.RefreshCookieName, out var refreshToken) || string.IsNullOrWhiteSpace(refreshToken))
-        {
-            authCookieService.ClearAuthCookies(httpContext.Response);
-            throw new InvalidRefreshTokenException();
-        }
-
-        try
-        {
-            var (user, session) = await authSessionService.RefreshSessionAsync(refreshToken, cancellationToken);
-            WriteCookies(authCookieService, httpContext, session);
-            return Results.Ok(new AuthSessionResponse(UserResponse.FromUser(user), session.AccessTokenExpiresAtUtc, session.RefreshTokenExpiresAtUtc));
-        }
-        catch
-        {
-            authCookieService.ClearAuthCookies(httpContext.Response);
-            throw;
-        }
-    }
-
-    private static async Task<IResult> GetCurrentUserAsync(HttpContext httpContext, ContryDbContext dbContext, CancellationToken cancellationToken)
-    {
-        if (!AccessTokenIdentityResolver.TryResolve(httpContext.User, out var identity) || identity is null)
-        {
-            throw new InvalidAccessTokenException();
-        }
-
-        var user = await dbContext.Users.SingleOrDefaultAsync(entity => entity.Id == identity.UserId, cancellationToken);
-
-        if (user is null)
-        {
-            throw new InvalidAccessTokenException();
-        }
-
-        return Results.Ok(UserResponse.FromUser(user));
-    }
-
-    private static async Task<IResult> GetXsrfTokenAsync(HttpContext httpContext, IXsrfTokenService xsrfTokenService, CurrentRefreshSessionService currentRefreshSessionService)
-    {
-        var session = await currentRefreshSessionService.GetSessionAsync(httpContext, allowRevoked: false, httpContext.RequestAborted);
-
-        if (session is null)
-        {
-            throw new InvalidRefreshTokenException();
-        }
-
-        var xsrf = xsrfTokenService.CreateToken(new XsrfSessionBinding(session.UserId, session.SessionFamilyId, session.ExpiresAtUtc));
-        return Results.Ok(new XsrfTokenResponse(xsrf.Token, xsrf.ExpiresAtUtc));
-    }
-
-    private static void WriteCookies(AuthCookieService authCookieService, HttpContext httpContext, AuthSessionResult session)
-    {
-        // The access cookie is kept as long as the refresh cookie so refresh and XSRF validation can still bind to the previous JWT identity.
-        authCookieService.AppendAccessToken(httpContext.Response, session.AccessToken, session.RefreshTokenExpiresAtUtc);
-        authCookieService.AppendRefreshToken(httpContext.Response, session.RefreshToken, session.RefreshTokenExpiresAtUtc);
     }
 }
