@@ -103,7 +103,7 @@ public sealed class AuthSessionService(
             throw new RefreshTokenReuseDetectedException();
         }
 
-        var replacementSession = CreateRefreshSession(session.UserId, now, out var replacementToken);
+        var replacementSession = CreateRefreshSession(session.UserId, session.SessionFamilyId, now, out var replacementToken);
         session.RevokedAtUtc = now;
         session.ReplacedBySessionId = replacementSession.Id;
 
@@ -130,7 +130,7 @@ public sealed class AuthSessionService(
             return;
         }
 
-        session.RevokedAtUtc = now;
+        await RevokeSessionFamilyAsync(session.SessionFamilyId, now, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -158,7 +158,7 @@ public sealed class AuthSessionService(
     private async Task<AuthSessionResult> IssueSessionAsync(User user, CancellationToken cancellationToken)
     {
         var now = _timeProvider.GetUtcNow();
-        var refreshSession = CreateRefreshSession(user.Id, now, out var refreshToken);
+        var refreshSession = CreateRefreshSession(user.Id, Guid.NewGuid(), now, out var refreshToken);
         _dbContext.RefreshSessions.Add(refreshSession);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -167,7 +167,7 @@ public sealed class AuthSessionService(
         return new AuthSessionResult(accessToken, accessTokenExpiresAtUtc, refreshToken, refreshSession.ExpiresAtUtc);
     }
 
-    private RefreshSession CreateRefreshSession(Guid userId, DateTimeOffset now, out string token)
+    private RefreshSession CreateRefreshSession(Guid userId, Guid sessionFamilyId, DateTimeOffset now, out string token)
     {
         var material = _refreshTokenService.CreateToken();
         token = material.Token;
@@ -176,10 +176,23 @@ public sealed class AuthSessionService(
         {
             Id = Guid.NewGuid(),
             UserId = userId,
+            SessionFamilyId = sessionFamilyId,
             TokenHash = material.TokenHash,
             CreatedAtUtc = now,
             ExpiresAtUtc = now.AddMinutes(_jwtOptions.RefreshTokenLifetimeMinutes)
         };
+    }
+
+    private async Task RevokeSessionFamilyAsync(Guid sessionFamilyId, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var sessions = await _dbContext.RefreshSessions
+            .Where(session => session.SessionFamilyId == sessionFamilyId)
+            .ToListAsync(cancellationToken);
+
+        foreach (var session in sessions.Where(session => session.RevokedAtUtc == null && session.ExpiresAtUtc > now))
+        {
+            session.RevokedAtUtc = now;
+        }
     }
 
     private async Task RevokeAllUserSessionsAsync(Guid userId, DateTimeOffset now, bool reuseDetected, CancellationToken cancellationToken)

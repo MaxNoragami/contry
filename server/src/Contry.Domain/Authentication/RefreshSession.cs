@@ -8,6 +8,8 @@ public sealed class RefreshSession
 
     public Guid UserId { get; set; }
 
+    public Guid SessionFamilyId { get; set; }
+
     public string TokenHash { get; set; } = string.Empty;
 
     public DateTimeOffset CreatedAtUtc { get; set; }

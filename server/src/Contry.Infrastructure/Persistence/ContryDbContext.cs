@@ -37,12 +37,14 @@ public sealed class ContryDbContext(DbContextOptions<ContryDbContext> options) :
             entity.ToTable("refresh_sessions");
 
             entity.HasKey(session => session.Id);
+            entity.Property(session => session.SessionFamilyId).IsRequired();
             entity.Property(session => session.TokenHash).HasMaxLength(128).IsRequired();
             entity.Property(session => session.CreatedAtUtc).IsRequired();
             entity.Property(session => session.ExpiresAtUtc).IsRequired();
 
             entity.HasIndex(session => session.TokenHash).IsUnique();
             entity.HasIndex(session => session.ExpiresAtUtc);
+            entity.HasIndex(session => session.SessionFamilyId);
             entity.HasIndex(session => session.UserId);
 
             entity.HasOne(session => session.User)
