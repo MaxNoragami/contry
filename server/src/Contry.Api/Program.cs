@@ -1,5 +1,6 @@
 using System.Text;
 using Contry.Api.Common.Errors;
+using Contry.Api.Features.TestRecords;
 using Contry.Api.Common.OpenApi;
 using Contry.Api.Features.Auth;
 using Contry.Infrastructure;
@@ -123,6 +124,7 @@ app.MapGet("/health", () => TypedResults.Ok(new
 }));
 
 app.MapAuthEndpoints();
+app.MapTestRecordEndpoints();
 
 app.Run();
 
@@ -131,6 +133,46 @@ static async Task EnsureDatabaseCreatedAsync(IServiceProvider services)
     using var scope = services.CreateScope();
     var dbContext = scope.ServiceProvider.GetRequiredService<ContryDbContext>();
     await dbContext.Database.EnsureCreatedAsync();
+    await EnsureTestRecordsTableExistsAsync(dbContext);
+}
+
+static async Task EnsureTestRecordsTableExistsAsync(ContryDbContext dbContext)
+{
+    var providerName = dbContext.Database.ProviderName ?? string.Empty;
+
+    if (providerName.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
+    {
+        await dbContext.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TABLE IF NOT EXISTS test_records (
+                "Id" uuid PRIMARY KEY,
+                "UserId" uuid NOT NULL,
+                "Name" character varying(128) NOT NULL,
+                "Notes" character varying(2048) NOT NULL,
+                "CreatedAtUtc" timestamp with time zone NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS "IX_test_records_UserId" ON test_records ("UserId");
+            """);
+
+        return;
+    }
+
+    if (providerName.Contains("Sqlite", StringComparison.OrdinalIgnoreCase))
+    {
+        await dbContext.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TABLE IF NOT EXISTS test_records (
+                "Id" TEXT NOT NULL CONSTRAINT "PK_test_records" PRIMARY KEY,
+                "UserId" TEXT NOT NULL,
+                "Name" TEXT NOT NULL,
+                "Notes" TEXT NOT NULL,
+                "CreatedAtUtc" TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS "IX_test_records_UserId" ON test_records ("UserId");
+            """);
+    }
 }
 
 static void LoadRootEnvironmentFile(string[] args)

@@ -1,4 +1,5 @@
 using Contry.Domain.Authentication;
+using Contry.Domain.TestRecords;
 using Contry.Domain.Users;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,6 +10,8 @@ public sealed class ContryDbContext(DbContextOptions<ContryDbContext> options) :
     public DbSet<User> Users => Set<User>();
 
     public DbSet<RefreshSession> RefreshSessions => Set<RefreshSession>();
+
+    public DbSet<TestRecord> TestRecords => Set<TestRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -46,6 +49,18 @@ public sealed class ContryDbContext(DbContextOptions<ContryDbContext> options) :
                 .WithMany(user => user.RefreshSessions)
                 .HasForeignKey(session => session.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TestRecord>(entity =>
+        {
+            entity.ToTable("test_records");
+
+            entity.HasKey(record => record.Id);
+            entity.Property(record => record.Name).HasMaxLength(128).IsRequired();
+            entity.Property(record => record.Notes).HasMaxLength(2048).IsRequired();
+            entity.Property(record => record.CreatedAtUtc).IsRequired();
+
+            entity.HasIndex(record => record.UserId);
         });
     }
 }
