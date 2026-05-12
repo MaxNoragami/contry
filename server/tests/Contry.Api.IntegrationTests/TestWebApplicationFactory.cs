@@ -1,18 +1,17 @@
-using Contry.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
+using Testcontainers.PostgreSql;
 
 namespace Contry.Api.IntegrationTests;
 
 public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    private SqliteConnection _connection = null!;
+    private readonly PostgreSqlContainer _database = new PostgreSqlBuilder("postgres:17-alpine")
+        .WithDatabase("contry_tests")
+        .WithUsername("contry")
+        .WithPassword("contry_tests123")
+        .Build();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -27,6 +26,7 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>, 
                 ["Jwt:Secret"] = "integration-tests-secret-key-1234567890",
                 ["Jwt:AccessTokenLifetimeMinutes"] = "1",
                 ["Jwt:RefreshTokenLifetimeMinutes"] = "5",
+                ["ConnectionStrings:Database"] = _database.GetConnectionString(),
                 ["AuthCookies:AccessCookieName"] = "contry_access",
                 ["AuthCookies:RefreshCookieName"] = "contry_refresh",
                 ["AuthCookies:Path"] = "/",
@@ -36,25 +36,9 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>, 
                 ["AuthCleanup:IntervalMinutes"] = "60"
             });
         });
-
-        builder.ConfigureServices(services =>
-        {
-            services.RemoveAll<DbContextOptions<ContryDbContext>>();
-            services.RemoveAll<IDbContextOptionsConfiguration<ContryDbContext>>();
-            services.RemoveAll<ContryDbContext>();
-            services.AddDbContext<ContryDbContext>(options => options.UseSqlite(_connection));
-        });
     }
 
-    public Task InitializeAsync()
-    {
-        _connection = new SqliteConnection("DataSource=:memory:");
-        _connection.Open();
-        return Task.CompletedTask;
-    }
+    public Task InitializeAsync() => _database.StartAsync();
 
-    async Task IAsyncLifetime.DisposeAsync()
-    {
-        await _connection.DisposeAsync();
-    }
+    async Task IAsyncLifetime.DisposeAsync() => await _database.DisposeAsync().AsTask();
 }

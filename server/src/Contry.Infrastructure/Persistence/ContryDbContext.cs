@@ -63,6 +63,11 @@ public sealed class ContryDbContext(DbContextOptions<ContryDbContext> options) :
             entity.Property(record => record.CreatedAtUtc).IsRequired();
 
             entity.HasIndex(record => record.UserId);
+
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(record => record.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

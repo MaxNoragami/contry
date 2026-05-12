@@ -74,7 +74,7 @@ var app = builder.Build();
 
 app.UseProblemDetailsExceptionMiddleware();
 
-await EnsureDatabaseCreatedAsync(app.Services);
+await EnsureDatabaseMigratedAsync(app.Services);
 
 if (app.Environment.IsDevelopment())
 {
@@ -128,123 +128,11 @@ app.MapTestRecordEndpoints();
 
 app.Run();
 
-static async Task EnsureDatabaseCreatedAsync(IServiceProvider services)
+static async Task EnsureDatabaseMigratedAsync(IServiceProvider services)
 {
     using var scope = services.CreateScope();
     var dbContext = scope.ServiceProvider.GetRequiredService<ContryDbContext>();
-    await dbContext.Database.EnsureCreatedAsync();
-    await EnsureRefreshSessionSchemaAsync(dbContext);
-    await EnsureTestRecordsTableExistsAsync(dbContext);
-}
-
-static async Task EnsureRefreshSessionSchemaAsync(ContryDbContext dbContext)
-{
-    var providerName = dbContext.Database.ProviderName ?? string.Empty;
-
-    if (providerName.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
-    {
-        await dbContext.Database.ExecuteSqlRawAsync(
-            """
-            ALTER TABLE refresh_sessions ADD COLUMN IF NOT EXISTS "SessionFamilyId" uuid;
-            UPDATE refresh_sessions SET "SessionFamilyId" = "Id" WHERE "SessionFamilyId" IS NULL;
-            ALTER TABLE refresh_sessions ALTER COLUMN "SessionFamilyId" SET NOT NULL;
-            CREATE INDEX IF NOT EXISTS "IX_refresh_sessions_SessionFamilyId" ON refresh_sessions ("SessionFamilyId");
-            """);
-
-        return;
-    }
-
-    if (providerName.Contains("Sqlite", StringComparison.OrdinalIgnoreCase))
-    {
-        if (!await SqliteColumnExistsAsync(dbContext, "refresh_sessions", "SessionFamilyId"))
-        {
-            await dbContext.Database.ExecuteSqlRawAsync(
-                """
-                ALTER TABLE refresh_sessions ADD COLUMN "SessionFamilyId" TEXT;
-                """);
-        }
-
-        await dbContext.Database.ExecuteSqlRawAsync(
-            """
-            UPDATE refresh_sessions SET "SessionFamilyId" = "Id" WHERE "SessionFamilyId" IS NULL;
-            CREATE INDEX IF NOT EXISTS "IX_refresh_sessions_SessionFamilyId" ON refresh_sessions ("SessionFamilyId");
-            """);
-    }
-}
-
-static async Task<bool> SqliteColumnExistsAsync(ContryDbContext dbContext, string tableName, string columnName)
-{
-    var connection = dbContext.Database.GetDbConnection();
-    var shouldClose = connection.State != System.Data.ConnectionState.Open;
-
-    if (shouldClose)
-    {
-        await connection.OpenAsync();
-    }
-
-    try
-    {
-        await using var command = connection.CreateCommand();
-        command.CommandText = $"PRAGMA table_info(\"{tableName}\")";
-
-        await using var reader = await command.ExecuteReaderAsync();
-
-        while (await reader.ReadAsync())
-        {
-            if (string.Equals(reader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-    finally
-    {
-        if (shouldClose)
-        {
-            await connection.CloseAsync();
-        }
-    }
-}
-
-static async Task EnsureTestRecordsTableExistsAsync(ContryDbContext dbContext)
-{
-    var providerName = dbContext.Database.ProviderName ?? string.Empty;
-
-    if (providerName.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
-    {
-        await dbContext.Database.ExecuteSqlRawAsync(
-            """
-            CREATE TABLE IF NOT EXISTS test_records (
-                "Id" uuid PRIMARY KEY,
-                "UserId" uuid NOT NULL,
-                "Name" character varying(128) NOT NULL,
-                "Notes" character varying(2048) NOT NULL,
-                "CreatedAtUtc" timestamp with time zone NOT NULL
-            );
-
-            CREATE INDEX IF NOT EXISTS "IX_test_records_UserId" ON test_records ("UserId");
-            """);
-
-        return;
-    }
-
-    if (providerName.Contains("Sqlite", StringComparison.OrdinalIgnoreCase))
-    {
-        await dbContext.Database.ExecuteSqlRawAsync(
-            """
-            CREATE TABLE IF NOT EXISTS test_records (
-                "Id" TEXT NOT NULL CONSTRAINT "PK_test_records" PRIMARY KEY,
-                "UserId" TEXT NOT NULL,
-                "Name" TEXT NOT NULL,
-                "Notes" TEXT NOT NULL,
-                "CreatedAtUtc" TEXT NOT NULL
-            );
-
-            CREATE INDEX IF NOT EXISTS "IX_test_records_UserId" ON test_records ("UserId");
-            """);
-    }
+    await dbContext.Database.MigrateAsync();
 }
 
 static void LoadRootEnvironmentFile(string[] args)
