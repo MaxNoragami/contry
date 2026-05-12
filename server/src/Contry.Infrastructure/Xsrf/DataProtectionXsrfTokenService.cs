@@ -9,9 +9,9 @@ public sealed class DataProtectionXsrfTokenService(IDataProtectionProvider provi
 {
     private readonly IDataProtector _protector = provider.CreateProtector("Contry.Api.XsrfToken.v1");
 
-    public XsrfTokenResult CreateToken(AccessTokenIdentity identity)
+    public XsrfTokenResult CreateToken(XsrfSessionBinding binding)
     {
-        var payload = new XsrfPayload(identity.UserId, identity.JwtId, identity.ExpiresAtUtc);
+        var payload = new XsrfPayload(binding.UserId, binding.SessionFamilyId, binding.ExpiresAtUtc);
         var json = JsonSerializer.Serialize(payload);
         var protectedPayload = _protector.Protect(Encoding.UTF8.GetBytes(json));
         var token = Convert.ToBase64String(protectedPayload)
@@ -19,10 +19,10 @@ public sealed class DataProtectionXsrfTokenService(IDataProtectionProvider provi
             .Replace('/', '_')
             .TrimEnd('=');
 
-        return new XsrfTokenResult(token, identity.ExpiresAtUtc);
+        return new XsrfTokenResult(token, binding.ExpiresAtUtc);
     }
 
-    public bool TryValidateToken(string token, AccessTokenIdentity identity, out DateTimeOffset expiresAtUtc)
+    public bool TryValidateToken(string token, XsrfSessionBinding binding, out DateTimeOffset expiresAtUtc)
     {
         expiresAtUtc = default;
 
@@ -32,7 +32,7 @@ public sealed class DataProtectionXsrfTokenService(IDataProtectionProvider provi
             var jsonBytes = _protector.Unprotect(protectedBytes);
             var payload = JsonSerializer.Deserialize<XsrfPayload>(jsonBytes);
 
-            if (payload is null || payload.UserId != identity.UserId || payload.JwtId != identity.JwtId)
+            if (payload is null || payload.UserId != binding.UserId || payload.SessionFamilyId != binding.SessionFamilyId)
             {
                 return false;
             }
@@ -54,5 +54,5 @@ public sealed class DataProtectionXsrfTokenService(IDataProtectionProvider provi
             _ => input
         };
 
-    private sealed record XsrfPayload(Guid UserId, string JwtId, DateTimeOffset ExpiresAtUtc);
+    private sealed record XsrfPayload(Guid UserId, Guid SessionFamilyId, DateTimeOffset ExpiresAtUtc);
 }

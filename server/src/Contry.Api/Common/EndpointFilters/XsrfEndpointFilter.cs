@@ -8,12 +8,10 @@ namespace Contry.Api.Common.EndpointFilters;
 
 public sealed class XsrfEndpointFilter(
     IXsrfTokenService xsrfTokenService,
-    IAccessTokenService accessTokenService,
-    AuthCookieService cookieService) : IEndpointFilter
+    CurrentRefreshSessionService currentRefreshSessionService) : IEndpointFilter
 {
     private readonly IXsrfTokenService _xsrfTokenService = xsrfTokenService;
-    private readonly IAccessTokenService _accessTokenService = accessTokenService;
-    private readonly AuthCookieService _cookieService = cookieService;
+    private readonly CurrentRefreshSessionService _currentRefreshSessionService = currentRefreshSessionService;
 
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
@@ -24,33 +22,28 @@ public sealed class XsrfEndpointFilter(
             throw new MissingXsrfTokenException();
         }
 
-        if (!TryResolveIdentity(httpContext, out var identity) || identity is null)
+        var session = await _currentRefreshSessionService.GetSessionAsync(httpContext, allowRevoked: true, httpContext.RequestAborted);
+
+        if (session is null)
         {
-            throw new InvalidAccessTokenException();
+            throw new InvalidRefreshTokenException();
         }
 
-        if (!_xsrfTokenService.TryValidateToken(xsrfHeader.ToString(), identity, out _))
+        if (httpContext.User.Identity?.IsAuthenticated == true)
+        {
+            if (!AccessTokenIdentityResolver.TryResolve(httpContext.User, out var identity) || identity is null || identity.UserId != session.UserId)
+            {
+                throw new InvalidAccessTokenException();
+            }
+        }
+
+        var binding = new XsrfSessionBinding(session.UserId, session.SessionFamilyId, session.ExpiresAtUtc);
+
+        if (!_xsrfTokenService.TryValidateToken(xsrfHeader.ToString(), binding, out _))
         {
             throw new InvalidXsrfTokenException();
         }
 
         return await next(context);
-    }
-
-    private bool TryResolveIdentity(HttpContext httpContext, out AccessTokenIdentity? identity)
-    {
-        if (httpContext.User.Identity?.IsAuthenticated == true && AccessTokenIdentityResolver.TryResolve(httpContext.User, out identity))
-        {
-            return true;
-        }
-
-        identity = null;
-
-        if (!httpContext.Request.Cookies.TryGetValue(_cookieService.AccessCookieName, out var accessToken) || string.IsNullOrWhiteSpace(accessToken))
-        {
-            return false;
-        }
-
-        return _accessTokenService.TryReadIdentity(accessToken, validateLifetime: false, out identity);
     }
 }

@@ -11,15 +11,15 @@ public sealed class DataProtectionXsrfTokenServiceTests
     {
         var provider = DataProtectionProvider.Create("Contry.Xsrf.Tests");
         var service = new DataProtectionXsrfTokenService(provider);
-        var identity = new AccessTokenIdentity(Guid.NewGuid(), "USER", "jwt-1", DateTimeOffset.UtcNow.AddMinutes(1));
+        var binding = new XsrfSessionBinding(Guid.NewGuid(), Guid.NewGuid(), DateTimeOffset.UtcNow.AddMinutes(1));
 
-        var token = service.CreateToken(identity);
+        var token = service.CreateToken(binding);
 
-        var valid = service.TryValidateToken(token.Token, identity, out var expiresAtUtc);
-        var invalid = service.TryValidateToken(token.Token, identity with { JwtId = "jwt-2" }, out _);
+        var valid = service.TryValidateToken(token.Token, binding, out var expiresAtUtc);
+        var invalid = service.TryValidateToken(token.Token, binding with { SessionFamilyId = Guid.NewGuid() }, out _);
 
         Assert.True(valid);
-        Assert.Equal(identity.ExpiresAtUtc, expiresAtUtc);
+        Assert.Equal(binding.ExpiresAtUtc, expiresAtUtc);
         Assert.False(invalid);
     }
 }

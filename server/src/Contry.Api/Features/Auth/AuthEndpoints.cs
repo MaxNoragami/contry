@@ -61,10 +61,9 @@ public static class AuthEndpoints
 
         app.MapGet("/xsrf", GetXsrfTokenAsync)
             .WithTags("Auth")
-            .RequireAuthorization()
             .WithName("GetXsrfToken")
-            .WithSummary("Mint an XSRF token for the current access token.")
-            .WithDescription("Creates a signed XSRF token derived from the current authenticated access-token identity.")
+            .WithSummary("Mint an XSRF token for the current refresh-session family.")
+            .WithDescription("Creates a signed XSRF token derived from the current refresh-session family so it stays valid across access-token refresh rotation.")
             .Produces<XsrfTokenResponse>()
             .Produces(StatusCodes.Status401Unauthorized);
 
@@ -154,14 +153,16 @@ public static class AuthEndpoints
         return Results.Ok(UserResponse.FromUser(user));
     }
 
-    private static IResult GetXsrfTokenAsync(HttpContext httpContext, IXsrfTokenService xsrfTokenService)
+    private static async Task<IResult> GetXsrfTokenAsync(HttpContext httpContext, IXsrfTokenService xsrfTokenService, CurrentRefreshSessionService currentRefreshSessionService)
     {
-        if (!AccessTokenIdentityResolver.TryResolve(httpContext.User, out var identity) || identity is null)
+        var session = await currentRefreshSessionService.GetSessionAsync(httpContext, allowRevoked: false, httpContext.RequestAborted);
+
+        if (session is null)
         {
-            throw new InvalidAccessTokenException();
+            throw new InvalidRefreshTokenException();
         }
 
-        var xsrf = xsrfTokenService.CreateToken(identity);
+        var xsrf = xsrfTokenService.CreateToken(new XsrfSessionBinding(session.UserId, session.SessionFamilyId, session.ExpiresAtUtc));
         return Results.Ok(new XsrfTokenResponse(xsrf.Token, xsrf.ExpiresAtUtc));
     }
 

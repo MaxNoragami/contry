@@ -158,6 +158,7 @@ public static class DependencyInjection
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
         services.AddScoped<IXsrfTokenService, DataProtectionXsrfTokenService>();
         services.AddScoped<AuthCookieService>();
+        services.AddScoped<CurrentRefreshSessionService>();
         services.AddScoped<AuthSessionService>();
         services.AddHostedService<RefreshSessionCleanupService>();
 

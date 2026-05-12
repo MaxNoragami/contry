@@ -1,4 +1,6 @@
 using System.Net;
+using System.Text;
+using System.Net.Mime;
 using System.Net.Http.Json;
 using Contry.Api.Features.Auth;
 using Contry.Api.Features.TestRecords;
@@ -41,10 +43,12 @@ public sealed class AuthFlowTests(TestWebApplicationFactory factory) : IClassFix
         var rotatedCookies = ParseCookies(refreshResponse);
         Assert.NotEqual(cookies["contry_refresh"], rotatedCookies["contry_refresh"]);
 
-        var rotatedXsrfResponse = await client.SendAsync(CreateRequest(HttpMethod.Get, "/xsrf", rotatedCookies));
-        var rotatedXsrf = (await rotatedXsrfResponse.Content.ReadFromJsonAsync<XsrfTokenResponse>())!;
+        var createRequest = CreateRequest(HttpMethod.Post, "/test-records", rotatedCookies, xsrf.Token);
+        createRequest.Content = JsonContent.Create(new CreateTestRecordRequest("post-refresh", "same xsrf across refresh family"));
+        var createResponse = await client.SendAsync(createRequest);
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
 
-        var logoutResponse = await client.SendAsync(CreateRequest(HttpMethod.Delete, "/sessions/current", rotatedCookies, rotatedXsrf.Token));
+        var logoutResponse = await client.SendAsync(CreateRequest(HttpMethod.Delete, "/sessions/current", rotatedCookies, xsrf.Token));
         Assert.Equal(HttpStatusCode.NoContent, logoutResponse.StatusCode);
     }
 
@@ -69,14 +73,32 @@ public sealed class AuthFlowTests(TestWebApplicationFactory factory) : IClassFix
         Assert.Equal("/problems/auth/refresh-token-reuse", reuseProblem.Type);
         Assert.Equal(401, reuseProblem.Status);
 
-        var currentXsrfResponse = await client.SendAsync(CreateRequest(HttpMethod.Get, "/xsrf", currentCookies));
-        var currentXsrf = (await currentXsrfResponse.Content.ReadFromJsonAsync<XsrfTokenResponse>())!;
-
-        var revokedCurrentSessionResponse = await client.SendAsync(CreateRequest(HttpMethod.Post, "/tokens/refresh", currentCookies, currentXsrf.Token));
+        var revokedCurrentSessionResponse = await client.SendAsync(CreateRequest(HttpMethod.Post, "/tokens/refresh", currentCookies, oldXsrf.Token));
         Assert.Equal(HttpStatusCode.Unauthorized, revokedCurrentSessionResponse.StatusCode);
         var revokedProblem = (await revokedCurrentSessionResponse.Content.ReadFromJsonAsync<ProblemResponse>())!;
         Assert.Equal("/problems/auth/refresh-token-reuse", revokedProblem.Type);
         Assert.Equal(401, revokedProblem.Status);
+    }
+
+    [Fact]
+    public async Task GetXsrf_WithValidRefreshCookieOnly_ReturnsFamilyBoundToken()
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+
+        var registerResponse = await client.PostAsJsonAsync("/users", new RegisterUserRequest("xsrf-only", "xsrf-only@example.com", "Password123!"));
+        Assert.Equal(HttpStatusCode.Created, registerResponse.StatusCode);
+        var cookies = ParseCookies(registerResponse);
+
+        var refreshOnlyCookies = new Dictionary<string, string>
+        {
+            ["contry_refresh"] = cookies["contry_refresh"]
+        };
+
+        var xsrfResponse = await client.SendAsync(CreateRequest(HttpMethod.Get, "/xsrf", refreshOnlyCookies));
+
+        Assert.Equal(HttpStatusCode.OK, xsrfResponse.StatusCode);
+        var xsrf = (await xsrfResponse.Content.ReadFromJsonAsync<XsrfTokenResponse>())!;
+        Assert.False(string.IsNullOrWhiteSpace(xsrf.Token));
     }
 
     [Fact]
@@ -111,6 +133,25 @@ public sealed class AuthFlowTests(TestWebApplicationFactory factory) : IClassFix
         Assert.Contains("Username", problem.Errors!.Keys);
         Assert.Contains("Email", problem.Errors.Keys);
         Assert.Contains("Password", problem.Errors.Keys);
+    }
+
+    [Fact]
+    public async Task MalformedJsonBody_ReturnsBadRequestProblemDetails()
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/users")
+        {
+            Content = new StringContent("{\"username\":\"max\",", Encoding.UTF8, MediaTypeNames.Application.Json)
+        };
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = (await response.Content.ReadFromJsonAsync<ProblemResponse>())!;
+        Assert.Equal("/problems/request/invalid-request", problem.Type);
+        Assert.Equal(400, problem.Status);
+        Assert.False(string.IsNullOrWhiteSpace(problem.TraceId));
     }
 
     [Fact]
