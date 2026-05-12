@@ -7,14 +7,9 @@ public sealed class XsrfOperationFilter : IOperationFilter
 {
     public void Apply(OpenApiOperation operation, OperationFilterContext context)
     {
-        var relativePath = "/" + (context.ApiDescription.RelativePath?.TrimStart('/') ?? string.Empty);
-        var method = context.ApiDescription.HttpMethod?.ToUpperInvariant();
-        var requiresXsrf = (relativePath, method) switch
-        {
-            ("/tokens/refresh", "POST") => true,
-            ("/sessions/current", "DELETE") => true,
-            _ => false
-        };
+        var requiresXsrf = context.ApiDescription.ActionDescriptor.EndpointMetadata
+            .OfType<RequireXsrfMetadata>()
+            .Any();
 
         if (!requiresXsrf)
         {
