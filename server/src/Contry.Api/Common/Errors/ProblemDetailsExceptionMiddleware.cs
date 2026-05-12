@@ -28,6 +28,11 @@ public sealed class ProblemDetailsExceptionMiddleware(RequestDelegate next, ILog
 
         switch (exception)
         {
+            case BadHttpRequestException badHttpRequestException:
+                _logger.LogWarning(badHttpRequestException, "Bad request for {Method} {Path}. TraceId: {TraceId}", httpContext.Request.Method, httpContext.Request.Path, traceId);
+                await WriteProblemAsync(httpContext, CreateBadRequestProblem(httpContext, badHttpRequestException, traceId));
+                return;
+
             case ValidationException validationException:
                 _logger.LogWarning(validationException, "Validation failed for {Method} {Path}. TraceId: {TraceId}", httpContext.Request.Method, httpContext.Request.Path, traceId);
                 await WriteProblemAsync(httpContext, CreateValidationProblem(httpContext, validationException, traceId));
@@ -43,6 +48,21 @@ public sealed class ProblemDetailsExceptionMiddleware(RequestDelegate next, ILog
                 await WriteProblemAsync(httpContext, CreateUnhandledProblem(httpContext, exception, traceId));
                 return;
         }
+    }
+
+    private ProblemDetails CreateBadRequestProblem(HttpContext httpContext, BadHttpRequestException exception, string traceId)
+    {
+        var detail = _environment.IsDevelopment()
+            ? exception.Message
+            : "The request body or shape is invalid.";
+
+        return CreateBaseProblem(
+            httpContext,
+            "/problems/request/invalid-request",
+            "Invalid request.",
+            exception.StatusCode,
+            detail,
+            traceId);
     }
 
     private ProblemDetails CreateAppProblem(HttpContext httpContext, AppException exception, string traceId)
