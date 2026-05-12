@@ -1,3 +1,4 @@
+using Contry.Application.Auth;
 using Contry.Infrastructure.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -22,8 +23,8 @@ public sealed class RefreshSessionCleanupService(
             try
             {
                 using var scope = _scopeFactory.CreateScope();
-                var authSessionService = scope.ServiceProvider.GetRequiredService<AuthSessionService>();
-                await authSessionService.DeleteExpiredRefreshSessionsAsync(stoppingToken);
+                var authStore = scope.ServiceProvider.GetRequiredService<IAuthStore>();
+                await authStore.DeleteExpiredRefreshSessionsAsync(TimeProvider.System.GetUtcNow(), stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
