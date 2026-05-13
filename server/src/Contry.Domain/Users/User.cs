@@ -1,4 +1,5 @@
 using Contry.Domain.Authentication;
+using Contry.Domain.Ranked;
 
 namespace Contry.Domain.Users;
 
@@ -21,4 +22,8 @@ public sealed class User
     public DateTimeOffset CreatedAtUtc { get; set; }
 
     public List<RefreshSession> RefreshSessions { get; set; } = [];
+
+    public List<RankedSession> RankedSessions { get; set; } = [];
+
+    public RankedUserStats? RankedUserStats { get; set; }
 }
