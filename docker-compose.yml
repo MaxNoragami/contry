@@ -15,5 +15,42 @@ services:
       timeout: 5s
       retries: 5
 
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: contry-server
+    restart: unless-stopped
+    env_file:
+      - ./.env.dev
+    environment:
+      ConnectionStrings__Database: Host=db;Port=5432;Database=contry_dev;Username=contry;Password=contry_dev123
+      Cors__AllowedOriginsCsv: http://localhost:5173
+      ASPNETCORE_URLS: http://+:8080
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:8080
+    container_name: contry-client
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_healthy
+    ports:
+      - "5173:80"
+
 volumes:
   postgres-data:

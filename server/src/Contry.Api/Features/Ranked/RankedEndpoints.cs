@@ -1,5 +1,6 @@
 using Contry.Api.Common.EndpointFilters;
 using Contry.Api.Features.Ranked.Handlers;
+using Contry.Application.Ranked;
 
 namespace Contry.Api.Features.Ranked;
 
@@ -37,6 +38,29 @@ public static class RankedEndpoints
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status409Conflict);
+
+        app.MapGet("/leaderboards/ranked", GetRankedLeaderboardHandler.HandleAsync)
+            .WithTags("Ranked")
+            .WithName("GetRankedLeaderboard")
+            .WithSummary("Get the global ranked leaderboard.")
+            .Produces<GetRankedLeaderboardResult>();
+
+        app.MapGet("/ranked-stats/me", GetMyRankedStatsHandler.HandleAsync)
+            .WithTags("Ranked")
+            .RequireAuthorization()
+            .WithName("GetMyRankedStats")
+            .WithSummary("Get the authenticated user's ranked stats.")
+            .Produces<MyRankedStatsResult>()
+            .Produces(StatusCodes.Status401Unauthorized);
+
+        app.MapDelete("/ranked-stats/me", ResetMyRankedStatsHandler.HandleAsync)
+            .WithTags("Ranked")
+            .RequireAuthorization()
+            .RequireXsrf()
+            .WithName("ResetMyRankedStats")
+            .WithSummary("Reset the authenticated user's ranked stats.")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status401Unauthorized);
 
         return app;
     }

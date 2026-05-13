@@ -3,24 +3,33 @@
   import { fly } from 'svelte/transition'
   import DiscoveryStatsMap from './DiscoveryStatsMap.svelte'
   import DiscoveryRing from './DiscoveryRing.svelte'
-  import type { DiscoveryStatsPayload } from '../../stores/game.svelte'
+  import { type CountryDiscoveryStatDto, type MyRankedStatsResult } from '../../api/client'
+  import type { createAuthStore } from '../../stores/auth.svelte'
+  import type { DiscoveryStatsPayload, DiscoveryContinentKey, DiscoveryCountrySummary, DiscoveryContinentSummary } from '../../stores/game.svelte'
+  import { getDB } from '../../stores/db'
+  import { syncDatasets } from '../../datasets/ingest'
 
   interface Props {
-    game: any
+    auth: ReturnType<typeof createAuthStore>
     goBack: () => void
     direction: 'forward' | 'back'
   }
 
-  let { game, goBack, direction }: Props = $props()
+  let { auth, goBack, direction }: Props = $props()
 
   let stats = $state<DiscoveryStatsPayload | null>(null)
   let loading = $state(true)
+
+  function percent(part: number, whole: number) {
+    if (whole <= 0) return 0
+    return (part / whole) * 100
+  }
 
   $effect(() => {
     let cancelled = false
     loading = true
 
-    game.getDiscoveryStats().then((data: DiscoveryStatsPayload) => {
+    loadDiscoveryStats().then((data) => {
       if (!cancelled) {
         stats = data
         loading = false
@@ -36,6 +45,101 @@
       cancelled = true
     }
   })
+
+  async function loadDiscoveryStats(): Promise<DiscoveryStatsPayload> {
+    const [apiStats, localData] = await Promise.all([
+      auth.request<MyRankedStatsResult>('/ranked-stats/me'),
+      loadLocalCountryData(),
+    ])
+
+    const discoveryByCountry = new Map<string, CountryDiscoveryStatDto>()
+    for (const stat of apiStats.countryDiscoveryStats) {
+      discoveryByCountry.set(stat.countryId, stat)
+    }
+
+    const countries: DiscoveryCountrySummary[] = localData.map((row) => {
+      const stat = discoveryByCountry.get(row.country_id)
+      return {
+        country_id: row.country_id,
+        name: row.name,
+        lat: row.lat,
+        lon: row.lon,
+        continent: row.continent,
+        discovered: stat?.discovered ?? false,
+        best_attempts: stat?.bestAttempts ?? null,
+        solved_count: stat?.solvedCount ?? 0,
+        last_solved_at: stat?.lastSolvedAtUtc ? new Date(stat.lastSolvedAtUtc).getTime() : null,
+      }
+    })
+
+    const discoveredCount = countries.filter((c) => c.discovered).length
+    const totalCount = countries.length
+
+    const continentAccents: Record<DiscoveryContinentKey, string> = {
+      'Africa': '#cc241d',
+      'Europe': '#458588',
+      'Asia': '#d79921',
+      'North America': '#98971a',
+      'South America': '#83a598',
+      'Oceania': '#b16286',
+    }
+    const continentLabels: Record<DiscoveryContinentKey, string> = {
+      'Africa': 'Africa',
+      'Europe': 'Europe',
+      'Asia': 'Asia',
+      'North America': 'N. America',
+      'South America': 'S. America',
+      'Oceania': 'Oceania',
+    }
+
+    const continents: DiscoveryContinentSummary[] = (Object.keys(continentAccents) as DiscoveryContinentKey[]).map((continent) => {
+      const continentCountries = countries.filter((c) => c.continent === continent)
+      const solved = continentCountries.filter((c) => c.discovered).length
+      return {
+        id: continent,
+        label: continentLabels[continent],
+        discovered_count: solved,
+        total_count: continentCountries.length,
+        discovered_percent: percent(solved, continentCountries.length),
+        accent: continentAccents[continent],
+      }
+    })
+
+    return {
+      countries,
+      discovered_count: discoveredCount,
+      total_count: totalCount,
+      discovered_percent: percent(discoveredCount, totalCount),
+      continents,
+    }
+  }
+
+  async function loadLocalCountryData() {
+    await syncDatasets(['continent'])
+    const db = await getDB()
+    const tx = db.transaction('dataset_rows', 'readonly')
+    const index = tx.objectStore('dataset_rows').index('by-dataset')
+    const [baseRows, continentRows] = await Promise.all([
+      index.getAll('countries_base'),
+      index.getAll('continent'),
+    ])
+    await tx.done
+
+    const continentByCountry = new Map<string, DiscoveryContinentKey>()
+    for (const row of continentRows) {
+      if (typeof row.value === 'string') {
+        continentByCountry.set(row.country_id, row.value as DiscoveryContinentKey)
+      }
+    }
+
+    return baseRows.map((row) => ({
+      country_id: row.country_id,
+      name: row.name || row.country_id,
+      lat: row.lat || 0,
+      lon: row.lon || 0,
+      continent: continentByCountry.get(row.country_id) || null,
+    }))
+  }
 </script>
 
 <div class="view-container" in:fly={{ x: direction === 'back' ? -20 : 20, duration: 250, delay: 100 }} out:fly={{ x: direction === 'back' ? 20 : -20, duration: 200 }}>

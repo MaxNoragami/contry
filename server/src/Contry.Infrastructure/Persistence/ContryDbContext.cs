@@ -21,6 +21,10 @@ public sealed class ContryDbContext(DbContextOptions<ContryDbContext> options) :
 
     public DbSet<RankedUserStats> RankedUserStats => Set<RankedUserStats>();
 
+    public DbSet<RankedCountryDiscoveryStat> RankedCountryDiscoveryStats => Set<RankedCountryDiscoveryStat>();
+
+    public DbSet<RankedClueUsageStat> RankedClueUsageStats => Set<RankedClueUsageStat>();
+
     public DbSet<BuiltInDatasetDocument> BuiltInDatasetDocuments => Set<BuiltInDatasetDocument>();
 
     public DbSet<TestRecord> TestRecords => Set<TestRecord>();
@@ -106,6 +110,32 @@ public sealed class ContryDbContext(DbContextOptions<ContryDbContext> options) :
             entity.HasOne(stats => stats.User)
                 .WithOne(user => user.RankedUserStats)
                 .HasForeignKey<RankedUserStats>(stats => stats.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RankedCountryDiscoveryStat>(entity =>
+        {
+            entity.ToTable("ranked_country_discovery_stats");
+
+            entity.HasKey(stats => new { stats.UserId, stats.CountryId });
+            entity.Property(stats => stats.CountryId).HasMaxLength(16).IsRequired();
+
+            entity.HasOne(stats => stats.User)
+                .WithMany()
+                .HasForeignKey(stats => stats.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RankedClueUsageStat>(entity =>
+        {
+            entity.ToTable("ranked_clue_usage_stats");
+
+            entity.HasKey(stats => new { stats.UserId, stats.ClueId });
+            entity.Property(stats => stats.ClueId).HasMaxLength(64).IsRequired();
+
+            entity.HasOne(stats => stats.User)
+                .WithMany()
+                .HasForeignKey(stats => stats.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

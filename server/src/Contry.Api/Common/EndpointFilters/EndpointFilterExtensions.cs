@@ -10,6 +10,5 @@ public static class EndpointFilterExtensions
 
     public static RouteHandlerBuilder RequireXsrf(this RouteHandlerBuilder builder)
         => builder
-            .AddEndpointFilter<XsrfEndpointFilter>()
             .WithMetadata(new RequireXsrfMetadata());
 }

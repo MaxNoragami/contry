@@ -26,8 +26,6 @@ public sealed class CreateRankedGuessCommandHandler(
         var challengeDefinition = await _rankedDatasetProvider.GetChallengeDefinitionAsync(today, cancellationToken);
         var guessedCountry = await _rankedDatasetProvider.FindCountryAsync(normalizedCountryId, cancellationToken)
             ?? throw new RankedInvalidCountryException();
-        var targetCountry = await _rankedDatasetProvider.FindCountryAsync(challengeDefinition.TargetCountryId, cancellationToken)
-            ?? throw new RankedInvalidCountryException();
 
         var challenge = await _rankedStore.FindChallengeByDateAsync(today, cancellationToken);
         if (challenge is null)
@@ -43,6 +41,9 @@ public sealed class CreateRankedGuessCommandHandler(
 
             await _rankedStore.AddChallengeAsync(challenge, cancellationToken);
         }
+
+        var targetCountry = await _rankedDatasetProvider.FindCountryAsync(challenge.TargetCountryId, cancellationToken)
+            ?? throw new RankedInvalidCountryException();
 
         var session = await _rankedStore.FindSessionByUserAndDateAsync(command.UserId, today, includeGuesses: true, cancellationToken);
         if (session is null)
@@ -92,7 +93,7 @@ public sealed class CreateRankedGuessCommandHandler(
         {
             session.Status = RankedSessionStatus.Won;
             session.CompletedAtUtc = now;
-            await UpdateStatsAsync(command.UserId, today, session.GuessCount, cancellationToken);
+            await UpdateStatsAsync(command.UserId, today, session.GuessCount, targetCountry.CountryId, clueSnapshot, cancellationToken);
         }
 
         await _rankedStore.UpdateSessionAsync(session, cancellationToken);
@@ -110,7 +111,13 @@ public sealed class CreateRankedGuessCommandHandler(
             DeserializeGuess(guess));
     }
 
-    private async Task UpdateStatsAsync(Guid userId, DateOnly challengeDateUtc, int guessCount, CancellationToken cancellationToken)
+    private async Task UpdateStatsAsync(
+        Guid userId,
+        DateOnly challengeDateUtc,
+        int guessCount,
+        string targetCountryId,
+        IReadOnlyList<RankedClueDefinition> clues,
+        CancellationToken cancellationToken)
     {
         var stats = await _rankedStore.FindUserStatsAsync(userId, cancellationToken);
         var isNewStats = false;
@@ -136,13 +143,66 @@ public sealed class CreateRankedGuessCommandHandler(
         stats.BestStreak = Math.Max(stats.BestStreak, stats.CurrentStreak);
         stats.LastCompletedChallengeDateUtc = challengeDateUtc;
 
+        var distribution = JsonSerializer.Deserialize<Dictionary<string, int>>(stats.GuessDistributionJson, JsonSerializerOptions) ?? [];
+        var guessCountStr = guessCount.ToString();
+        distribution[guessCountStr] = distribution.TryGetValue(guessCountStr, out var count) ? count + 1 : 1;
+        stats.GuessDistributionJson = JsonSerializer.Serialize(distribution, JsonSerializerOptions);
+
         if (isNewStats)
         {
             await _rankedStore.AddUserStatsAsync(stats, cancellationToken);
-            return;
+        }
+        else
+        {
+            await _rankedStore.UpdateUserStatsAsync(stats, cancellationToken);
         }
 
-        await _rankedStore.UpdateUserStatsAsync(stats, cancellationToken);
+        var discoveryStat = await _rankedStore.FindCountryDiscoveryStatAsync(userId, targetCountryId, cancellationToken);
+        var isNewDiscovery = false;
+        if (discoveryStat is null)
+        {
+            discoveryStat = new RankedCountryDiscoveryStat
+            {
+                UserId = userId,
+                CountryId = targetCountryId,
+                Discovered = true,
+                SolvedCount = 0
+            };
+            isNewDiscovery = true;
+        }
+
+        discoveryStat.SolvedCount += 1;
+        discoveryStat.LastSolvedAtUtc = _timeProvider.GetUtcNow();
+        discoveryStat.BestAttempts = discoveryStat.BestAttempts is null ? guessCount : Math.Min(discoveryStat.BestAttempts.Value, guessCount);
+
+        if (isNewDiscovery)
+        {
+            await _rankedStore.AddCountryDiscoveryStatAsync(discoveryStat, cancellationToken);
+        }
+        else
+        {
+            await _rankedStore.UpdateCountryDiscoveryStatAsync(discoveryStat, cancellationToken);
+        }
+
+        foreach (var clue in clues)
+        {
+            var clueStat = await _rankedStore.FindClueUsageStatAsync(userId, clue.Id, cancellationToken);
+            if (clueStat is null)
+            {
+                clueStat = new RankedClueUsageStat
+                {
+                    UserId = userId,
+                    ClueId = clue.Id,
+                    UsageCount = 1
+                };
+                await _rankedStore.AddClueUsageStatAsync(clueStat, cancellationToken);
+            }
+            else
+            {
+                clueStat.UsageCount += 1;
+                await _rankedStore.UpdateClueUsageStatAsync(clueStat, cancellationToken);
+            }
+        }
     }
 
     private static IReadOnlyList<RankedClueDefinition> DeserializeClues(string json)

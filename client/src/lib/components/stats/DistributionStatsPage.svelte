@@ -2,24 +2,35 @@
   import { ArrowLeft } from 'lucide-svelte'
   import { fly } from 'svelte/transition'
   import GuessDistributionChart from './GuessDistributionChart.svelte'
-  import type { DistributionStatsPayload } from '../../stores/game.svelte'
+  import { type MyRankedStatsResult } from '../../api/client'
+  import type { createAuthStore } from '../../stores/auth.svelte'
+  import type { DistributionBucket } from '../../stores/game.svelte'
 
   interface Props {
-    game: any
+    auth: ReturnType<typeof createAuthStore>
     goBack: () => void
     direction: 'forward' | 'back'
   }
 
-  let { game, goBack, direction }: Props = $props()
+  let { auth, goBack, direction }: Props = $props()
 
-  let stats = $state<DistributionStatsPayload | null>(null)
+  type DistStatsPayload = {
+    average_guesses: number | null
+    fastest_guess: number | null
+    slowest_guess: number | null
+    current_streak: number
+    best_streak: number
+    guess_distribution: DistributionBucket[]
+  }
+
+  let stats = $state<DistStatsPayload | null>(null)
   let loading = $state(true)
 
   $effect(() => {
     let cancelled = false
     loading = true
 
-    game.getDistributionStats().then((data: DistributionStatsPayload) => {
+    loadDistributionStats().then((data) => {
       if (!cancelled) {
         stats = data
         loading = false
@@ -36,12 +47,43 @@
     }
   })
 
+  async function loadDistributionStats(): Promise<DistStatsPayload> {
+    const apiStats = await auth.request<MyRankedStatsResult>('/ranked-stats/me')
+
+    const rawDist: Record<string, number> = JSON.parse(apiStats.guessDistributionJson || '{}')
+
+    const guess_distribution: DistributionBucket[] = ['1','2','3','4','5','6','7','8','9','10+'].map((label) => ({
+      label,
+      count: label === '10+' ? sumAbove(rawDist, 10) : (rawDist[label] ?? 0),
+    }))
+
+    return {
+      average_guesses: apiStats.wonCount > 0
+        ? apiStats.totalGuessesOnWins / apiStats.wonCount
+        : null,
+      fastest_guess: apiStats.fastestWinGuessCount,
+      slowest_guess: apiStats.slowestWinGuessCount,
+      current_streak: apiStats.currentStreak,
+      best_streak: apiStats.bestStreak,
+      guess_distribution,
+    }
+  }
+
+  function sumAbove(dist: Record<string, number>, threshold: number): number {
+    let total = 0
+    for (const [key, count] of Object.entries(dist)) {
+      const n = parseInt(key, 10)
+      if (!isNaN(n) && n >= threshold) total += count
+    }
+    return total
+  }
+
   function formatAverage(value: number | null) {
     if (value == null) return '—'
     return value.toFixed(1)
   }
 
-  function formatInt(value: number | null) {
+  function formatInt(value: number | null | undefined) {
     return value == null ? '—' : String(value)
   }
 </script>
@@ -71,31 +113,18 @@
           <div class="metric-label">Slowest guess</div>
         </div>
         <div class="metric-card">
-          <div class="metric-value">{stats.give_up_rate.toFixed(stats.give_up_rate < 10 ? 1 : 0)}%</div>
-          <div class="metric-label">Give up rate</div>
+          <div class="metric-value">{formatInt(stats.current_streak)}</div>
+          <div class="metric-label">Current streak</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value">{formatInt(stats.best_streak)}</div>
+          <div class="metric-label">Best streak</div>
         </div>
       </div>
 
       <section class="section-block">
         <h3>Guess distribution</h3>
         <GuessDistributionChart buckets={stats.guess_distribution} />
-      </section>
-
-      <section class="section-block">
-        <h3>Most given up countries</h3>
-        {#if stats.top_give_up_countries.length > 0}
-          <div class="country-list">
-            {#each stats.top_give_up_countries as country, index (country.country_id)}
-              <div class="country-row">
-                <div class="country-rank">#{index + 1}</div>
-                <div class="country-name">{country.name}</div>
-                <div class="country-value">{country.give_up_count}</div>
-              </div>
-            {/each}
-          </div>
-        {:else}
-          <p class="empty-text">No give-ups recorded yet.</p>
-        {/if}
       </section>
 
     {:else}
@@ -174,16 +203,10 @@
 
   .modal-body::-webkit-scrollbar { display: none; }
 
-  .message,
-  .empty-text {
-    margin: 0;
-    color: var(--muted);
-    line-height: 1.5;
-  }
-
   .message {
     margin: auto 0;
     text-align: center;
+    color: var(--muted);
   }
 
   .metrics-grid {
@@ -225,35 +248,9 @@
     font-weight: 600;
   }
 
-  .country-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .country-row {
-    display: grid;
-    grid-template-columns: 40px 1fr auto;
-    gap: 12px;
-    align-items: center;
-    padding: 10px 12px;
-    border-radius: 10px;
-    background: var(--panel-soft);
-  }
-
-  .country-rank,
-  .country-value {
-    font-weight: 700;
-    color: var(--warn);
-  }
-
-  .country-name {
-    color: var(--text);
-  }
-
   @media (min-width: 460px) {
     .metrics-grid {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
     }
   }
 </style>
