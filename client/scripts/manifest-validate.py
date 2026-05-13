@@ -6,8 +6,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLIC_ROOT = ROOT / "public"
-DATASETS_ROOT = PUBLIC_ROOT / "datasets"
+REPO_ROOT = ROOT.parent
+DATASETS_ROOT = REPO_ROOT / "server" / "datasets"
 MANIFEST_PATH = DATASETS_ROOT / "manifest.json"
 BASE_PATH = DATASETS_ROOT / "base" / "countries.csv"
 
@@ -66,7 +66,7 @@ def validate_clues(clues: list[dict], playable_codes: set[str]) -> None:
         metadata_path = clue.get("metadata_path")
         if not metadata_path:
             fail(f"clue {clue_id} missing metadata_path")
-        metadata_abs = PUBLIC_ROOT / metadata_path.lstrip("/")
+        metadata_abs = REPO_ROOT / "server" / metadata_path.lstrip("/")
         metadata = read_json(metadata_abs)
         if metadata.get("id") != clue_id:
             fail(f"metadata id mismatch for clue {clue_id}")
@@ -76,7 +76,7 @@ def validate_clues(clues: list[dict], playable_codes: set[str]) -> None:
             data_path = clue.get("data_path")
             if not data_path:
                 fail(f"non-computed clue {clue_id} missing data_path")
-            data_abs = PUBLIC_ROOT / data_path.lstrip("/")
+            data_abs = REPO_ROOT / "server" / data_path.lstrip("/")
             if not data_abs.exists():
                 fail(f"data file missing for clue {clue_id}")
             with data_abs.open(newline="", encoding="utf-8") as f:
