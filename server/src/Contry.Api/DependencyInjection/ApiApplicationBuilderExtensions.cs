@@ -1,6 +1,9 @@
 using Contry.Api.Common.Errors;
 using Contry.Api.Features.Auth;
+using Contry.Api.Features.Datasets;
+using Contry.Api.Features.Ranked;
 using Contry.Api.Features.TestRecords;
+using Contry.Infrastructure.Datasets;
 using Contry.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,6 +15,7 @@ public static class ApiApplicationBuilderExtensions
     {
         app.UseProblemDetailsExceptionMiddleware();
         await app.MigrateDatabaseAsync();
+        await app.SyncBuiltInDatasetsAsync();
 
         if (app.Environment.IsDevelopment())
         {
@@ -40,6 +44,8 @@ public static class ApiApplicationBuilderExtensions
         }));
 
         app.MapAuthEndpoints();
+        app.MapDatasetEndpoints();
+        app.MapRankedEndpoints();
         app.MapTestRecordEndpoints();
     }
 
@@ -48,6 +54,13 @@ public static class ApiApplicationBuilderExtensions
         using var scope = app.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<ContryDbContext>();
         await dbContext.Database.MigrateAsync();
+    }
+
+    private static async Task SyncBuiltInDatasetsAsync(this WebApplication app)
+    {
+        using var scope = app.Services.CreateScope();
+        var builtInDatasetCatalog = scope.ServiceProvider.GetRequiredService<BuiltInDatasetCatalog>();
+        await builtInDatasetCatalog.SyncAsync(CancellationToken.None);
     }
 
     private static void UseConfiguredSwaggerUi(this WebApplication app)

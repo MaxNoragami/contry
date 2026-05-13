@@ -1,4 +1,6 @@
+using Contry.Domain.Datasets;
 using Contry.Domain.Authentication;
+using Contry.Domain.Ranked;
 using Contry.Domain.TestRecords;
 using Contry.Domain.Users;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +12,16 @@ public sealed class ContryDbContext(DbContextOptions<ContryDbContext> options) :
     public DbSet<User> Users => Set<User>();
 
     public DbSet<RefreshSession> RefreshSessions => Set<RefreshSession>();
+
+    public DbSet<RankedChallenge> RankedChallenges => Set<RankedChallenge>();
+
+    public DbSet<RankedSession> RankedSessions => Set<RankedSession>();
+
+    public DbSet<RankedGuess> RankedGuesses => Set<RankedGuess>();
+
+    public DbSet<RankedUserStats> RankedUserStats => Set<RankedUserStats>();
+
+    public DbSet<BuiltInDatasetDocument> BuiltInDatasetDocuments => Set<BuiltInDatasetDocument>();
 
     public DbSet<TestRecord> TestRecords => Set<TestRecord>();
 
@@ -30,6 +42,83 @@ public sealed class ContryDbContext(DbContextOptions<ContryDbContext> options) :
 
             entity.HasIndex(user => user.NormalizedUsername).IsUnique();
             entity.HasIndex(user => user.NormalizedEmail).IsUnique();
+        });
+
+        modelBuilder.Entity<RankedChallenge>(entity =>
+        {
+            entity.ToTable("ranked_challenges");
+
+            entity.HasKey(challenge => challenge.Id);
+            entity.Property(challenge => challenge.TargetCountryId).HasMaxLength(16).IsRequired();
+            entity.Property(challenge => challenge.ClueSetJson).HasColumnType("jsonb").IsRequired();
+            entity.Property(challenge => challenge.CreatedAtUtc).IsRequired();
+
+            entity.HasIndex(challenge => challenge.ChallengeDateUtc).IsUnique();
+        });
+
+        modelBuilder.Entity<RankedSession>(entity =>
+        {
+            entity.ToTable("ranked_sessions");
+
+            entity.HasKey(session => session.Id);
+            entity.Property(session => session.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
+            entity.Property(session => session.StartedAtUtc).IsRequired();
+
+            entity.HasIndex(session => new { session.UserId, session.RankedChallengeId }).IsUnique();
+            entity.HasIndex(session => session.RankedChallengeId);
+
+            entity.HasOne(session => session.User)
+                .WithMany(user => user.RankedSessions)
+                .HasForeignKey(session => session.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(session => session.RankedChallenge)
+                .WithMany(challenge => challenge.Sessions)
+                .HasForeignKey(session => session.RankedChallengeId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RankedGuess>(entity =>
+        {
+            entity.ToTable("ranked_guesses");
+
+            entity.HasKey(guess => guess.Id);
+            entity.Property(guess => guess.GuessCountryId).HasMaxLength(16).IsRequired();
+            entity.Property(guess => guess.GuessCountryName).HasMaxLength(128).IsRequired();
+            entity.Property(guess => guess.ResultsJson).HasColumnType("jsonb").IsRequired();
+            entity.Property(guess => guess.CreatedAtUtc).IsRequired();
+
+            entity.HasIndex(guess => new { guess.RankedSessionId, guess.AttemptNumber }).IsUnique();
+            entity.HasIndex(guess => new { guess.RankedSessionId, guess.GuessCountryId }).IsUnique();
+
+            entity.HasOne(guess => guess.RankedSession)
+                .WithMany(session => session.Guesses)
+                .HasForeignKey(guess => guess.RankedSessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RankedUserStats>(entity =>
+        {
+            entity.ToTable("ranked_user_stats");
+
+            entity.HasKey(stats => stats.UserId);
+
+            entity.HasOne(stats => stats.User)
+                .WithOne(user => user.RankedUserStats)
+                .HasForeignKey<RankedUserStats>(stats => stats.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<BuiltInDatasetDocument>(entity =>
+        {
+            entity.ToTable("built_in_dataset_documents");
+
+            entity.HasKey(document => document.Path);
+            entity.Property(document => document.Path).HasMaxLength(256).IsRequired();
+            entity.Property(document => document.ContentType).HasMaxLength(128).IsRequired();
+            entity.Property(document => document.Checksum).HasMaxLength(96).IsRequired();
+            entity.Property(document => document.Content).IsRequired();
+            entity.Property(document => document.UpdatedAtUtc).IsRequired();
         });
 
         modelBuilder.Entity<RefreshSession>(entity =>

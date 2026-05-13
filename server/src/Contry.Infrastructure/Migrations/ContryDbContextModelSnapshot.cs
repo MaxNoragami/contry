@@ -68,6 +68,173 @@ namespace Contry.Infrastructure.Migrations
                     b.ToTable("refresh_sessions", (string)null);
                 });
 
+            modelBuilder.Entity("Contry.Domain.Datasets.BuiltInDatasetDocument", b =>
+                {
+                    b.Property<string>("Path")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Checksum")
+                        .IsRequired()
+                        .HasMaxLength(96)
+                        .HasColumnType("character varying(96)");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Path");
+
+                    b.ToTable("built_in_dataset_documents", (string)null);
+                });
+
+            modelBuilder.Entity("Contry.Domain.Ranked.RankedChallenge", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("ChallengeDateUtc")
+                        .HasColumnType("date");
+
+                    b.Property<string>("ClueSetJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TargetCountryId")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChallengeDateUtc")
+                        .IsUnique();
+
+                    b.ToTable("ranked_challenges", (string)null);
+                });
+
+            modelBuilder.Entity("Contry.Domain.Ranked.RankedGuess", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AttemptNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("GuessCountryId")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("GuessCountryName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid>("RankedSessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResultsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RankedSessionId", "AttemptNumber")
+                        .IsUnique();
+
+                    b.HasIndex("RankedSessionId", "GuessCountryId")
+                        .IsUnique();
+
+                    b.ToTable("ranked_guesses", (string)null);
+                });
+
+            modelBuilder.Entity("Contry.Domain.Ranked.RankedSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("GuessCount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("RankedChallengeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RankedChallengeId");
+
+                    b.HasIndex("UserId", "RankedChallengeId")
+                        .IsUnique();
+
+                    b.ToTable("ranked_sessions", (string)null);
+                });
+
+            modelBuilder.Entity("Contry.Domain.Ranked.RankedUserStats", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("BestStreak")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CurrentStreak")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("FastestWinGuessCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("LastCompletedChallengeDateUtc")
+                        .HasColumnType("date");
+
+                    b.Property<int>("PlayedCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SlowestWinGuessCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TotalGuessesOnWins")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("WonCount")
+                        .HasColumnType("integer");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("ranked_user_stats", (string)null);
+                });
+
             modelBuilder.Entity("Contry.Domain.TestRecords.TestRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -158,6 +325,47 @@ namespace Contry.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Contry.Domain.Ranked.RankedGuess", b =>
+                {
+                    b.HasOne("Contry.Domain.Ranked.RankedSession", "RankedSession")
+                        .WithMany("Guesses")
+                        .HasForeignKey("RankedSessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RankedSession");
+                });
+
+            modelBuilder.Entity("Contry.Domain.Ranked.RankedSession", b =>
+                {
+                    b.HasOne("Contry.Domain.Ranked.RankedChallenge", "RankedChallenge")
+                        .WithMany("Sessions")
+                        .HasForeignKey("RankedChallengeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Contry.Domain.Users.User", "User")
+                        .WithMany("RankedSessions")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RankedChallenge");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Contry.Domain.Ranked.RankedUserStats", b =>
+                {
+                    b.HasOne("Contry.Domain.Users.User", "User")
+                        .WithOne("RankedUserStats")
+                        .HasForeignKey("Contry.Domain.Ranked.RankedUserStats", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Contry.Domain.TestRecords.TestRecord", b =>
                 {
                     b.HasOne("Contry.Domain.Users.User", null)
@@ -167,8 +375,22 @@ namespace Contry.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Contry.Domain.Ranked.RankedChallenge", b =>
+                {
+                    b.Navigation("Sessions");
+                });
+
+            modelBuilder.Entity("Contry.Domain.Ranked.RankedSession", b =>
+                {
+                    b.Navigation("Guesses");
+                });
+
             modelBuilder.Entity("Contry.Domain.Users.User", b =>
                 {
+                    b.Navigation("RankedSessions");
+
+                    b.Navigation("RankedUserStats");
+
                     b.Navigation("RefreshSessions");
                 });
 #pragma warning restore 612, 618
