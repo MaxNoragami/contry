@@ -112,8 +112,8 @@ bun run build
 
 ## Admin endpoints
 
-- `PUT /admin/ranked-challenges/today/target`
-- `DELETE /admin/leaderboards/ranked`
+- `PUT /ranked/challenges/today/target` - admin only
+- `DELETE /leaderboards/ranked` - admin only
 
 Example:
 

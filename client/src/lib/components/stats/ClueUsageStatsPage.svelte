@@ -56,7 +56,7 @@
   })
 
   async function loadClueUsageStats(): Promise<ClueUsageEntry[]> {
-    const apiStats = await auth.request<MyRankedStatsResult>('/ranked-stats/me')
+    const apiStats = await auth.request<MyRankedStatsResult>('/ranked/stats/me')
 
     return apiStats.clueUsageStats
       .map((stat: ClueUsageStatDto) => {

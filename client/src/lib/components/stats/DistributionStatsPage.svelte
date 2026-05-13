@@ -48,7 +48,7 @@
   })
 
   async function loadDistributionStats(): Promise<DistStatsPayload> {
-    const apiStats = await auth.request<MyRankedStatsResult>('/ranked-stats/me')
+    const apiStats = await auth.request<MyRankedStatsResult>('/ranked/stats/me')
 
     const rawDist: Record<string, number> = JSON.parse(apiStats.guessDistributionJson || '{}')
 

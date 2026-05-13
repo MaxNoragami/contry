@@ -217,7 +217,7 @@
   async function handleClearData() {
     clearingData = true
     try {
-      await auth.request<void>('/ranked-stats/me', { method: 'DELETE' })
+      await auth.request<void>('/ranked/stats/me', { method: 'DELETE' })
       toastStore.push('All ranked data cleared.')
       window.history.back()
     } catch (error) {

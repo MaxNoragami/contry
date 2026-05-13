@@ -125,9 +125,9 @@ export interface MyRankedStatsResult {
 }
 
 export async function getMyRankedStats(signal?: AbortSignal): Promise<MyRankedStatsResult> {
-  return apiRequest<MyRankedStatsResult>('/ranked-stats/me', { signal })
+  return apiRequest<MyRankedStatsResult>('/ranked/stats/me', { signal })
 }
 
 export async function resetMyRankedStats(xsrfToken: string, signal?: AbortSignal): Promise<void> {
-  return apiRequest<void>('/ranked-stats/me', { method: 'DELETE', xsrfToken, signal })
+  return apiRequest<void>('/ranked/stats/me', { method: 'DELETE', xsrfToken, signal })
 }

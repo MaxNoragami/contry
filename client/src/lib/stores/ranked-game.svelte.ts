@@ -144,12 +144,12 @@ export function createRankedGameState(auth: ReturnType<typeof createAuthStore>) 
         await hydrateCountryPool()
       }
 
-      const challenge = await auth.request<RankedChallengeResponse>('/ranked-challenges/current')
+      const challenge = await auth.request<RankedChallengeResponse>('/ranked/challenges/current')
       challengeDateUtc = challenge.challengeDateUtc
       activeClues = challenge.clues.map(toClueDef)
       availableClues = [...activeClues]
 
-      const session = await auth.request<RankedSessionResponse>('/ranked-sessions/current')
+      const session = await auth.request<RankedSessionResponse>('/ranked/sessions/current')
       applySession(session)
       initialized = true
     } finally {
@@ -203,7 +203,7 @@ export function createRankedGameState(auth: ReturnType<typeof createAuthStore>) 
     pendingGuessCountryId = match.country_id
 
     try {
-      const response = await auth.request<CreateRankedGuessResponse>('/ranked-guesses', {
+      const response = await auth.request<CreateRankedGuessResponse>('/ranked/guesses', {
         method: 'POST',
         body: { countryId: match.country_id },
       })

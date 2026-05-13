@@ -1,9 +1,12 @@
 using Contry.Api.Common.Errors;
 using Contry.Api.Common.Security;
-using Contry.Api.Features.Admin;
 using Contry.Api.Features.Auth;
 using Contry.Api.Features.Datasets;
-using Contry.Api.Features.Ranked;
+using Contry.Api.Features.Leaderboards;
+using Contry.Api.Features.Ranked.Challenges;
+using Contry.Api.Features.Ranked.Guesses;
+using Contry.Api.Features.Ranked.Sessions;
+using Contry.Api.Features.Ranked.Stats;
 using Contry.Api.Features.TestRecords;
 using Contry.Infrastructure.Datasets;
 using Contry.Infrastructure.Persistence;
@@ -49,9 +52,12 @@ public static class ApiApplicationBuilderExtensions
         }));
 
         app.MapAuthEndpoints();
-        app.MapAdminEndpoints();
         app.MapDatasetEndpoints();
-        app.MapRankedEndpoints();
+        app.MapRankedChallengeEndpoints();
+        app.MapRankedSessionEndpoints();
+        app.MapRankedGuessEndpoints();
+        app.MapRankedStatsEndpoints();
+        app.MapLeaderboardEndpoints();
         app.MapTestRecordEndpoints();
     }
 

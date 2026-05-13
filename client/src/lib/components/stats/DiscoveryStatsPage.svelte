@@ -48,7 +48,7 @@
 
   async function loadDiscoveryStats(): Promise<DiscoveryStatsPayload> {
     const [apiStats, localData] = await Promise.all([
-      auth.request<MyRankedStatsResult>('/ranked-stats/me'),
+      auth.request<MyRankedStatsResult>('/ranked/stats/me'),
       loadLocalCountryData(),
     ])
 

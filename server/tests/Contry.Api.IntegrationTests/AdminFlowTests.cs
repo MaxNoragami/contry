@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
-using Contry.Api.Features.Admin;
 using Contry.Api.Features.Auth;
+using Contry.Api.Features.Ranked.Challenges;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Contry.Api.IntegrationTests;
@@ -19,7 +19,7 @@ public sealed class AdminFlowTests(TestWebApplicationFactory factory) : IClassFi
             ["contry_refresh"] = cookies["contry_refresh"]
         };
 
-        var request = CreateRequest(HttpMethod.Put, "/admin/ranked-challenges/today/target", refreshOnlyCookies);
+        var request = CreateRequest(HttpMethod.Put, "/ranked/challenges/today/target", refreshOnlyCookies);
         request.Content = JsonContent.Create(new SetTodayRankedTargetRequest("FR"));
 
         var response = await client.SendAsync(request);
@@ -39,7 +39,7 @@ public sealed class AdminFlowTests(TestWebApplicationFactory factory) : IClassFi
         Assert.Equal(HttpStatusCode.OK, xsrfResponse.StatusCode);
         var xsrf = (await xsrfResponse.Content.ReadFromJsonAsync<XsrfTokenResponse>())!;
 
-        var request = CreateRequest(HttpMethod.Put, "/admin/ranked-challenges/today/target", cookies, xsrf.Token);
+        var request = CreateRequest(HttpMethod.Put, "/ranked/challenges/today/target", cookies, xsrf.Token);
         request.Content = JsonContent.Create(new SetTodayRankedTargetRequest("FR"));
 
         var response = await client.SendAsync(request);
