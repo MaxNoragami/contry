@@ -18,6 +18,7 @@ public static class ApiApplicationBuilderExtensions
         app.UseProblemDetailsExceptionMiddleware();
         await app.MigrateDatabaseAsync();
         await app.SyncBuiltInDatasetsAsync();
+        await DatabaseSeeder.EnsureAdminUserAsync(app);
 
         if (app.Environment.IsDevelopment())
         {

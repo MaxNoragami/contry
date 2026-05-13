@@ -53,7 +53,7 @@ public sealed class AdminFlowTests(TestWebApplicationFactory factory) : IClassFi
 
     private static async Task<Dictionary<string, string>> LoginAsAdminAsync(HttpClient client)
     {
-        var response = await client.PostAsJsonAsync("/sessions", new CreateSessionRequest("admin", "admin12345"));
+        var response = await client.PostAsJsonAsync("/sessions", new CreateSessionRequest(TestWebApplicationFactory.AdminUsername, TestWebApplicationFactory.AdminPassword));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return ParseCookies(response);
     }

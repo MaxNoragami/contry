@@ -21,10 +21,13 @@ Monorepo for the `Contry` country-guessing game.
 - Client: `http://localhost:5173`
 - PostgreSQL: `localhost:5432`
 
-Development startup seeds a default admin user:
+The server requires bootstrap admin credentials through environment configuration in every environment. On startup it creates that admin user only if it does not already exist:
 
-- username: `admin`
-- password: `admin12345`
+- `AdminBootstrap__Username`
+- `AdminBootstrap__Email`
+- `AdminBootstrap__Password`
+
+Development startup additionally seeds fake ranked/demo users and historical ranked data.
 
 ## Running locally without Docker
 

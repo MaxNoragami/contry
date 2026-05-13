@@ -7,6 +7,10 @@ namespace Contry.Api.IntegrationTests;
 
 public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
+    public const string AdminUsername = "admin_test";
+    public const string AdminEmail = "admin@test.local";
+    public const string AdminPassword = "admin-test-12345";
+
     private readonly PostgreSqlContainer _database = new PostgreSqlBuilder("postgres:17-alpine")
         .WithDatabase("contry_tests")
         .WithUsername("contry")
@@ -27,6 +31,9 @@ public sealed class TestWebApplicationFactory : WebApplicationFactory<Program>, 
                 ["Jwt:AccessTokenLifetimeMinutes"] = "1",
                 ["Jwt:RefreshTokenLifetimeMinutes"] = "5",
                 ["ConnectionStrings:Database"] = _database.GetConnectionString(),
+                ["AdminBootstrap:Username"] = AdminUsername,
+                ["AdminBootstrap:Email"] = AdminEmail,
+                ["AdminBootstrap:Password"] = AdminPassword,
                 ["AuthCookies:AccessCookieName"] = "contry_access",
                 ["AuthCookies:RefreshCookieName"] = "contry_refresh",
                 ["AuthCookies:Path"] = "/",

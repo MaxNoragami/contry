@@ -1,16 +1,16 @@
 using Contry.Application.Ranked;
 using Contry.Domain.Ranked;
 using Contry.Domain.Users;
+using Contry.Infrastructure.Configuration;
 using Contry.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Contry.Api.DependencyInjection;
 
 public static class DatabaseSeeder
 {
-    private const string AdminUsername = "admin";
-    private const string AdminPassword = "admin12345";
     private const string SeedPassword = "Test1234!";
 
     private static readonly (string Username, string Email)[] FakePlayers =
@@ -37,6 +37,35 @@ public static class DatabaseSeeder
         "hemisphere", "continent", "temperature_avg_c", "population", "coordinates"
     ];
 
+    public static async Task EnsureAdminUserAsync(WebApplication app)
+    {
+        using var scope = app.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<ContryDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<ContryDbContext>>();
+        var adminOptions = scope.ServiceProvider.GetRequiredService<IOptions<AdminBootstrapOptions>>().Value;
+
+        var existingAdmin = await dbContext.Users
+            .AnyAsync(user => user.NormalizedUsername == adminOptions.Username.ToUpperInvariant(), CancellationToken.None);
+
+        if (!existingAdmin)
+        {
+            dbContext.Users.Add(new User
+            {
+                Id = Guid.NewGuid(),
+                Username = adminOptions.Username,
+                NormalizedUsername = adminOptions.Username.ToUpperInvariant(),
+                Email = adminOptions.Email,
+                NormalizedEmail = adminOptions.Email.ToUpperInvariant(),
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminOptions.Password),
+                Role = UserRole.Admin,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            });
+
+            await dbContext.SaveChangesAsync();
+            logger.LogInformation("Created bootstrap admin user '{Username}'.", adminOptions.Username);
+        }
+    }
+
     public static async Task SeedDevelopmentDataAsync(WebApplication app)
     {
         using var scope = app.Services.CreateScope();
@@ -44,28 +73,7 @@ public static class DatabaseSeeder
         var rankedDatasetProvider = scope.ServiceProvider.GetRequiredService<IRankedDatasetProvider>();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<ContryDbContext>>();
 
-        var existingAdmin = await dbContext.Users
-            .AnyAsync(user => user.NormalizedUsername == AdminUsername.ToUpperInvariant(), CancellationToken.None);
-
-        if (!existingAdmin)
-        {
-            dbContext.Users.Add(new User
-            {
-                Id = Guid.NewGuid(),
-                Username = AdminUsername,
-                NormalizedUsername = AdminUsername.ToUpperInvariant(),
-                Email = "admin@contry.local",
-                NormalizedEmail = "ADMIN@CONTRY.LOCAL",
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(AdminPassword),
-                Role = UserRole.Admin,
-                CreatedAtUtc = DateTimeOffset.UtcNow,
-            });
-
-            await dbContext.SaveChangesAsync();
-            logger.LogInformation("Seeded development admin user '{Username}'.", AdminUsername);
-        }
-
-        // Only seed fake players if no users exist yet beyond the default admin.
+        // Only seed fake players if no users exist yet beyond the bootstrap admin.
         var userCount = await dbContext.Users.CountAsync();
         if (userCount > 1)
         {
