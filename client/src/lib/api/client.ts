@@ -94,7 +94,7 @@ export interface GetRankedLeaderboardResult {
   pageSize: number
 }
 
-export async function getRankedLeaderboard(page: number = 1, pageSize: number = 50, signal?: AbortSignal): Promise<GetRankedLeaderboardResult> {
+export async function getRankedLeaderboard(page: number = 1, pageSize: number = 7, signal?: AbortSignal): Promise<GetRankedLeaderboardResult> {
   return apiRequest<GetRankedLeaderboardResult>(`/leaderboards/ranked?page=${page}&pageSize=${pageSize}`, { signal })
 }
 

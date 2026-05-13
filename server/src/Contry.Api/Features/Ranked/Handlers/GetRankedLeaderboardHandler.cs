@@ -12,7 +12,7 @@ public static class GetRankedLeaderboardHandler
         [FromServices] GetRankedLeaderboardQueryHandler handler,
         CancellationToken cancellationToken)
     {
-        var result = await handler.HandleAsync(new GetRankedLeaderboardQuery(page ?? 1, pageSize ?? 50), cancellationToken);
+        var result = await handler.HandleAsync(new GetRankedLeaderboardQuery(page ?? 1, pageSize ?? 7), cancellationToken);
         return TypedResults.Ok(result);
     }
 }

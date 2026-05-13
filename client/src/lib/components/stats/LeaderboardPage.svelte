@@ -14,7 +14,7 @@
   let loading = $state(true)
   let error = $state(false)
   let page = $state(1)
-  const pageSize = 25
+  const pageSize = 7
 
   $effect(() => {
     let cancelled = false
