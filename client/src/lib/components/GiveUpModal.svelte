@@ -42,7 +42,7 @@
       <Flag size={36} />
     </div>
     <h2>Give up?</h2>
-    <p class="modal-description">The answer will be revealed and this round will end. Your progress will be saved.</p>
+    <p class="modal-description">The answer will be revealed and this round will end. Ranked give-ups count as a DNF loss.</p>
 
     <button class="btn-confirm" onclick={onConfirm}>Give up</button>
   </div>

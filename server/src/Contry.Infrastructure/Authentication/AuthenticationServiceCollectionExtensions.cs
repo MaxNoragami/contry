@@ -7,6 +7,7 @@ using Contry.Application.Ranked.Challenges.Queries;
 using Contry.Application.Ranked.Guesses.Commands;
 using Contry.Application.Ranked.Leaderboards.Queries;
 using Contry.Application.Ranked.Sessions.Queries;
+using Contry.Application.Ranked.Sessions.Commands;
 using Contry.Application.Ranked.Stats.Commands;
 using Contry.Application.Ranked.Stats.Queries;
 using Contry.Infrastructure.Datasets;
@@ -48,6 +49,7 @@ public static class AuthenticationServiceCollectionExtensions
         services.AddScoped<GetCurrentUserQueryHandler>();
         services.AddScoped<GetCurrentRankedChallengeQueryHandler>();
         services.AddScoped<GetCurrentRankedSessionQueryHandler>();
+        services.AddScoped<GiveUpCurrentRankedSessionCommandHandler>();
         services.AddScoped<CreateRankedGuessCommandHandler>();
         services.AddScoped<ResetMyRankedStatsCommandHandler>();
         services.AddScoped<GetRankedLeaderboardQueryHandler>();

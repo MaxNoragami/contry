@@ -1,15 +1,18 @@
-using System.Text.Json;
 using Contry.Application.Ranked;
 using Contry.Application.Ranked.Models;
+using Contry.Application.Ranked.Sessions;
 
 namespace Contry.Application.Ranked.Sessions.Queries;
 
-public sealed class GetCurrentRankedSessionQueryHandler(IRankedStore rankedStore, IRankedDatasetProvider rankedDatasetProvider, TimeProvider timeProvider)
+public sealed class GetCurrentRankedSessionQueryHandler(
+    IRankedStore rankedStore,
+    IRankedDatasetProvider rankedDatasetProvider,
+    RankedGuessEvaluator rankedGuessEvaluator,
+    TimeProvider timeProvider)
 {
-    private static readonly JsonSerializerOptions JsonSerializerOptions = new(JsonSerializerDefaults.Web);
-
     private readonly IRankedStore _rankedStore = rankedStore;
     private readonly IRankedDatasetProvider _rankedDatasetProvider = rankedDatasetProvider;
+    private readonly RankedGuessEvaluator _rankedGuessEvaluator = rankedGuessEvaluator;
     private readonly TimeProvider _timeProvider = timeProvider;
 
     public async Task<CurrentRankedSessionResult> HandleAsync(GetCurrentRankedSessionQuery query, CancellationToken cancellationToken)
@@ -19,36 +22,9 @@ public sealed class GetCurrentRankedSessionQueryHandler(IRankedStore rankedStore
 
         if (session is null)
         {
-            return new CurrentRankedSessionResult(today, "not_started", 0, null, []);
+            return RankedSessionResultFactory.CreateNotStarted(today);
         }
 
-        var guesses = session.Guesses
-            .OrderBy(guess => guess.AttemptNumber)
-            .Select(DeserializeGuess)
-            .ToList();
-
-        return new CurrentRankedSessionResult(
-            today,
-            ToApiStatus(session.Status),
-            session.GuessCount,
-            session.CompletedAtUtc,
-            guesses);
+        return await RankedSessionResultFactory.BuildAsync(session, _rankedDatasetProvider, _rankedGuessEvaluator, cancellationToken);
     }
-
-    private static RankedGuessRecordResult DeserializeGuess(Domain.Ranked.RankedGuess guess)
-        => new(
-            guess.AttemptNumber,
-            guess.GuessCountryId,
-            guess.GuessCountryName,
-            JsonSerializer.Deserialize<List<RankedClueResult>>(guess.ResultsJson, JsonSerializerOptions) ?? [],
-            guess.CreatedAtUtc);
-
-    private static string ToApiStatus(Domain.Ranked.RankedSessionStatus status)
-        => status switch
-        {
-            Domain.Ranked.RankedSessionStatus.Playing => "playing",
-            Domain.Ranked.RankedSessionStatus.Won => "won",
-            Domain.Ranked.RankedSessionStatus.Lost => "lost",
-            _ => "playing"
-        };
 }

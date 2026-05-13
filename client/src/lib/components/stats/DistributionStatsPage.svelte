@@ -52,7 +52,7 @@
 
     const rawDist: Record<string, number> = JSON.parse(apiStats.guessDistributionJson || '{}')
 
-    const guess_distribution: DistributionBucket[] = ['1','2','3','4','5','6','7','8','9','10+'].map((label) => ({
+    const guess_distribution: DistributionBucket[] = ['1','2','3','4','5','6','7','8','9','10+','DNF'].map((label) => ({
       label,
       count: label === '10+' ? sumAbove(rawDist, 10) : (rawDist[label] ?? 0),
     }))

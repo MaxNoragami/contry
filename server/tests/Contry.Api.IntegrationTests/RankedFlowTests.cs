@@ -109,6 +109,41 @@ public sealed class RankedFlowTests(TestWebApplicationFactory factory) : IClassF
         Assert.Equal("/problems/ranked/session-completed", problem.Type);
     }
 
+    [Fact]
+    public async Task RankedGiveUp_CompletesSessionAsLost_AndRevealsTarget()
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+
+        var (_, cookies, xsrf) = await RegisterAndGetXsrfAsync(client, "ranked-giveup", "ranked-giveup@example.com");
+        var wrongCountryId = await GetNonWinningCountryIdAsync();
+
+        var guessRequest = CreateRequest(HttpMethod.Post, "/ranked/guesses", cookies, xsrf);
+        guessRequest.Content = JsonContent.Create(new CreateRankedGuessRequest(wrongCountryId));
+        var guessResponse = await client.SendAsync(guessRequest);
+        Assert.Equal(HttpStatusCode.OK, guessResponse.StatusCode);
+
+        var giveUpRequest = CreateRequest(HttpMethod.Post, "/ranked/sessions/current/give-up", cookies, xsrf);
+        var giveUpResponse = await client.SendAsync(giveUpRequest);
+
+        Assert.Equal(HttpStatusCode.OK, giveUpResponse.StatusCode);
+        var session = (await giveUpResponse.Content.ReadFromJsonAsync<RankedSessionResponse>())!;
+        Assert.Equal("lost", session.Status);
+        Assert.Equal(1, session.GuessCount);
+        Assert.Equal(2, session.Guesses.Count);
+        Assert.NotNull(session.CompletedAtUtc);
+
+        var revealRow = session.Guesses[^1];
+        Assert.Equal(await GetCurrentTargetCountryIdAsync(), revealRow.GuessCountryId);
+        Assert.All(revealRow.Results, result => Assert.Equal("blue", result.Tone));
+
+        var persistedSessionResponse = await client.SendAsync(CreateRequest(HttpMethod.Get, "/ranked/sessions/current", cookies));
+        Assert.Equal(HttpStatusCode.OK, persistedSessionResponse.StatusCode);
+        var persistedSession = (await persistedSessionResponse.Content.ReadFromJsonAsync<RankedSessionResponse>())!;
+        Assert.Equal("lost", persistedSession.Status);
+        Assert.Equal(2, persistedSession.Guesses.Count);
+        Assert.Equal(revealRow.GuessCountryId, persistedSession.Guesses[^1].GuessCountryId);
+    }
+
     private static async Task<(AuthSessionResponse Session, Dictionary<string, string> Cookies)> RegisterAndGetCookiesAsync(HttpClient client, string username, string email)
     {
         var registerResponse = await client.PostAsJsonAsync("/users", new RegisterUserRequest(username, email, "Password123!"));

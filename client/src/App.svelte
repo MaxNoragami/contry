@@ -286,7 +286,7 @@
         onReset={() => game.resetGame()}
         onGiveUp={() => (giveUpOpen = true)}
         placeholder={mode.current === 'ranked' ? 'Type cōntry name (ranked)' : 'Type cōntry name (arcade)'}
-        giveUpDisabled={mode.current === 'ranked'}
+        giveUpDisabled={false}
         resetLabel={mode.current === 'ranked' ? countdownString : 'Play again!'}
         resetDisabled={mode.current === 'ranked'}
         bind:inputRef
@@ -309,9 +309,7 @@
     bind:visible={giveUpOpen}
     onConfirm={() => {
       giveUpOpen = false;
-      if (mode.current === 'arcade') {
-        arcadeGame.giveUp();
-      }
+      void game.giveUp();
     }}
     onCancel={() => (giveUpOpen = false)}
   />
