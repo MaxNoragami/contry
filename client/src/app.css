@@ -40,6 +40,10 @@
   --island-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
 
   --gap: 6px;
+
+  --toast-error-bg: color-mix(in oklab, var(--bad) 22%, var(--panel));
+  --toast-error-border: color-mix(in oklab, var(--bad) 55%, var(--panel-3));
+  --toast-error-text: var(--text);
 }
 
 :root[data-theme='light'] {
@@ -77,6 +81,10 @@
   --island-bg: rgba(251, 241, 199, 0.9);
   --island-border: rgba(213, 196, 161, 0.85);
   --island-shadow: 0 6px 24px rgba(60, 56, 54, 0.12);
+
+  --toast-error-bg: color-mix(in oklab, var(--bad) 18%, var(--panel));
+  --toast-error-border: color-mix(in oklab, var(--bad) 42%, var(--border));
+  --toast-error-text: var(--text);
 }
 
 /* ── Reset ────────────────────────────────────────── */

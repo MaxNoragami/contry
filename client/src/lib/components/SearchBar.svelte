@@ -10,12 +10,16 @@
     onQueryChange: (value: string) => void;
     onPreview: (country: string | null) => void;
     onValidate: (country: string) => boolean;
-    onSubmit: (country: string) => { valid: boolean; correct?: boolean };
+    onSubmit: (country: string) => Promise<{ valid: boolean; correct?: boolean }> | { valid: boolean; correct?: boolean };
     hasWon?: boolean;
     gameOver?: boolean;
     targetCountryName?: string | null;
     onReset?: () => void;
     onGiveUp?: () => void;
+    placeholder?: string;
+    giveUpDisabled?: boolean;
+    resetLabel?: string;
+    resetDisabled?: boolean;
     inputRef?: HTMLInputElement | undefined;
     isFocused?: boolean;
   }
@@ -32,6 +36,10 @@
     targetCountryName = null,
     onReset,
     onGiveUp,
+    placeholder = "Type cōntry name",
+    giveUpDisabled = false,
+    resetLabel = "Play again!",
+    resetDisabled = false,
     inputRef = $bindable(),
     isFocused = $bindable(false),
   }: Props = $props();
@@ -121,8 +129,8 @@
     selectedIndex = -1;
 
     // Brief pause so user sees the filled input, then submit
-    setTimeout(() => {
-      const result = onSubmit(country);
+    setTimeout(async () => {
+      const result = await onSubmit(country);
 
       if (!result.correct) {
         // Valid but wrong guess — shake, then clear it
@@ -232,7 +240,7 @@
       type="button"
       class="round-btn icon-switch-btn"
       class:faded={gameOver}
-      disabled={gameOver}
+      disabled={gameOver || (!showClear && giveUpDisabled)}
       aria-label={showClear ? "Clear input" : "Give up"}
       onmousedown={(e) => {
         e.preventDefault();
@@ -252,8 +260,8 @@
     </button>
 
     {#if gameOver}
-      <button class="play-again-btn" type="button" onclick={handleResetClick}>
-        Play again!
+      <button class="play-again-btn" type="button" onclick={handleResetClick} disabled={resetDisabled}>
+        {resetLabel}
       </button>
     {:else}
       <label for="guess-country" class="sr-only">Country name</label>
@@ -271,7 +279,7 @@
         onblur={() => isFocused = false}
         onclick={handleInputClick}
         autocomplete="off"
-        placeholder="Type cōntry name"
+        placeholder={placeholder}
         bind:this={inputRef}
       />
     {/if}
@@ -319,22 +327,22 @@
   }
 
   @media (hover: hover) {
-    .round-btn:hover {
+    .round-btn:hover:not(:disabled) {
       background: var(--panel-3);
       border-color: color-mix(in oklab, var(--border) 58%, var(--text));
     }
 
-    .round-btn.submit:hover {
+    .round-btn.submit:hover:not(:disabled) {
       background: color-mix(in oklab, var(--accent) 35%, var(--panel-2));
     }
   }
 
-  .round-btn:active {
+  .round-btn:active:not(:disabled) {
     background: var(--panel-3);
     border-color: color-mix(in oklab, var(--border) 58%, var(--text));
   }
 
-  .round-btn.submit:active {
+  .round-btn.submit:active:not(:disabled) {
     background: color-mix(in oklab, var(--accent) 35%, var(--panel-2));
   }
 
@@ -412,14 +420,22 @@
     transition: transform 0.15s, background 0.15s;
   }
 
+  .play-again-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background: color-mix(in oklab, var(--panel) 52%, var(--panel-2));
+    border-color: color-mix(in oklab, var(--border) 78%, var(--text));
+    color: var(--muted);
+  }
+
   @media (hover: hover) {
-    .play-again-btn:hover {
+    .play-again-btn:hover:not(:disabled) {
       background: color-mix(in oklab, var(--accent) 82%, var(--chip-bg));
       border-color: color-mix(in oklab, var(--accent) 82%, var(--chip-bg));
     }
   }
 
-  .play-again-btn:active {
+  .play-again-btn:active:not(:disabled) {
     background: color-mix(in oklab, var(--accent) 82%, var(--chip-bg));
     border-color: color-mix(in oklab, var(--accent) 82%, var(--chip-bg));
     transform: scale(0.96);

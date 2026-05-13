@@ -29,12 +29,14 @@ export type ClueResult = {
   tone: ChipTone
   kind: ClueKind
   trend?: 'higher' | 'lower'
+  pending?: boolean
 }
 
 export type GuessRow = {
   rank: number
   country: string
   results: ClueResult[]
+  pending?: boolean
 }
 
 export type ClueDef = {
@@ -151,7 +153,7 @@ export type ClueUsageStatsPayload = {
 
 // ── Reactive state ─────────────────────────────────────
 
-export function createGameState() {
+export function createArcadeGameState() {
   let query = $state('')
   let previewCountry = $state<string | null>(null)
   let rows = $state<GuessRow[]>([])
@@ -1211,3 +1213,5 @@ export function createGameState() {
     giveUp,
   }
 }
+
+export const createGameState = createArcadeGameState

@@ -1,28 +1,61 @@
 <script lang="ts">
   import {
-    ChartColumnBig,
     CircleQuestionMark,
-    Heart,
+    Joystick,
     Settings,
+    Swords,
+    UserRound,
+    UserRoundPlus,
   } from 'lucide-svelte'
+
+  import type { GameMode } from '../stores/game-mode.svelte'
 
   interface Props {
     onSettingsClick?: () => void
     onHelpClick?: () => void
-    onStatsClick?: () => void
+    onProfileClick?: () => void
+    onModeToggle?: () => void
+    mode: GameMode
+    isAuthenticated: boolean
+    settingsDisabled?: boolean
   }
-  let { onSettingsClick, onHelpClick, onStatsClick }: Props = $props()
+  let {
+    onSettingsClick,
+    onHelpClick,
+    onProfileClick,
+    onModeToggle,
+    mode,
+    isAuthenticated,
+    settingsDisabled = false,
+  }: Props = $props()
 </script>
 
 <header class="island header-island">
   <div class="header-actions">
-    <button type="button" class="icon-btn" aria-label="Favorites"><Heart /></button>
+    <button
+      type="button"
+      class="icon-btn"
+      aria-label={mode === 'ranked' ? 'Switch to arcade mode' : 'Switch to ranked mode'}
+      onclick={onModeToggle}
+    >
+      {#if mode === 'ranked'}
+        <Joystick />
+      {:else}
+        <Swords />
+      {/if}
+    </button>
     <button type="button" class="icon-btn" aria-label="Help" onclick={onHelpClick}><CircleQuestionMark /></button>
   </div>
   <h1>CŌNTRY</h1>
   <div class="header-actions header-actions--end">
-    <button type="button" class="icon-btn" aria-label="Stats" onclick={onStatsClick}><ChartColumnBig /></button>
-    <button type="button" class="icon-btn" aria-label="Settings" onclick={onSettingsClick}><Settings /></button>
+    <button type="button" class="icon-btn" aria-label={isAuthenticated ? 'User profile' : 'Account'} onclick={onProfileClick}>
+      {#if isAuthenticated}
+        <UserRound />
+      {:else}
+        <UserRoundPlus />
+      {/if}
+    </button>
+    <button type="button" class="icon-btn" aria-label="Settings" onclick={onSettingsClick} disabled={settingsDisabled}><Settings /></button>
   </div>
 </header>
 
@@ -74,6 +107,11 @@
     border-color: var(--border-strong);
     background: var(--panel-2);
     color: var(--text);
+  }
+
+  .icon-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
   }
 
   @media (hover: hover) {

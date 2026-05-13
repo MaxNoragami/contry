@@ -10,7 +10,7 @@
   let { row, isPast = false }: Props = $props();
 </script>
 
-<article class="guess-row" class:past={isPast} role="listitem">
+<article class="guess-row" class:past={isPast} class:pending={row.pending} role="listitem">
   <h2>{row.rank}. {row.country}</h2>
   <div class="chips">
     {#each row.results as result}
@@ -34,6 +34,10 @@
 
   .guess-row.past {
     opacity: 0.55;
+  }
+
+  .guess-row.pending {
+    opacity: 0.92;
   }
 
   h2 {

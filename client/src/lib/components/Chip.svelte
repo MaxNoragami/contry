@@ -8,13 +8,17 @@
   let { result }: Props = $props()
 </script>
 
-<div class="chip {result.tone}">
-  {#if result.kind === 'numeric' && result.trend}
+<div class="chip {result.tone}" class:pending={result.pending}>
+  {#if result.pending}
+    <span class="chip-skeleton" aria-hidden="true"></span>
+  {:else if result.kind === 'numeric' && result.trend}
     <span class="trend {result.trend}" aria-hidden="true">
       {result.trend === 'higher' ? '▲' : '▼'}
     </span>
   {/if}
-  <span class="chip-value" class:is-checkmark={result.value === '✓'}>{result.value}</span>
+  {#if !result.pending}
+    <span class="chip-value" class:is-checkmark={result.value === '✓'}>{result.value}</span>
+  {/if}
 </div>
 
 <style>
@@ -103,5 +107,24 @@
   .trend.lower {
     top: auto;
     bottom: 12%;
+  }
+
+  .chip.pending {
+    background: color-mix(in oklab, var(--panel-3) 60%, var(--panel));
+    border-color: color-mix(in oklab, var(--border) 88%, var(--panel-3));
+  }
+
+  .chip-skeleton {
+    width: 72%;
+    height: 14px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, color-mix(in oklab, var(--panel-3) 86%, white) 0%, color-mix(in oklab, var(--panel-2) 78%, white) 45%, color-mix(in oklab, var(--panel-3) 86%, white) 100%);
+    background-size: 180% 100%;
+    animation: shimmer 1.1s linear infinite;
+  }
+
+  @keyframes shimmer {
+    from { background-position: 180% 0; }
+    to { background-position: -180% 0; }
   }
 </style>
