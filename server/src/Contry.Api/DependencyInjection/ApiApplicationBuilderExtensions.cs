@@ -1,4 +1,6 @@
 using Contry.Api.Common.Errors;
+using Contry.Api.Common.Security;
+using Contry.Api.Features.Admin;
 using Contry.Api.Features.Auth;
 using Contry.Api.Features.Datasets;
 using Contry.Api.Features.Ranked;
@@ -19,12 +21,14 @@ public static class ApiApplicationBuilderExtensions
 
         if (app.Environment.IsDevelopment())
         {
+            await DatabaseSeeder.SeedDevelopmentDataAsync(app);
             app.UseConfiguredSwaggerUi();
         }
 
         app.UseStaticFiles();
         app.UseHttpsRedirection();
         app.UseCors("Client");
+        app.UseMiddleware<XsrfValidationMiddleware>();
         app.UseAuthentication();
         app.UseAuthorization();
     }
@@ -44,6 +48,7 @@ public static class ApiApplicationBuilderExtensions
         }));
 
         app.MapAuthEndpoints();
+        app.MapAdminEndpoints();
         app.MapDatasetEndpoints();
         app.MapRankedEndpoints();
         app.MapTestRecordEndpoints();

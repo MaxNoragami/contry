@@ -53,6 +53,29 @@ public sealed class CreateRankedGuessCommandHandlerTests
         Assert.Equal(1, store.UserStats[userId].PlayedCount);
     }
 
+    [Fact]
+    public async Task HandleAsync_UsesPersistedChallengeTarget_WhenChallengeAlreadyExists()
+    {
+        var today = new DateOnly(2026, 5, 13);
+        var store = new FakeRankedStore();
+        store.Challenges.Add(new RankedChallenge
+        {
+            Id = Guid.NewGuid(),
+            ChallengeDateUtc = today,
+            TargetCountryId = "RO",
+            ClueSetJson = "[]",
+            CreatedAtUtc = new DateTimeOffset(2026, 5, 13, 0, 0, 0, TimeSpan.Zero)
+        });
+
+        var provider = new FakeRankedDatasetProvider();
+        var handler = new CreateRankedGuessCommandHandler(store, provider, new RankedGuessEvaluator(), new FakeTimeProvider(new DateTimeOffset(2026, 5, 13, 10, 0, 0, TimeSpan.Zero)));
+
+        var result = await handler.HandleAsync(new CreateRankedGuessCommand(Guid.NewGuid(), "RO"), CancellationToken.None);
+
+        Assert.Equal("won", result.Status);
+        Assert.Equal("RO", result.Guess.GuessCountryId);
+    }
+
     private sealed class FakeRankedStore : IRankedStore
     {
         public List<RankedChallenge> Challenges { get; } = [];
@@ -65,6 +88,22 @@ public sealed class CreateRankedGuessCommandHandlerTests
         public Task AddChallengeAsync(RankedChallenge challenge, CancellationToken cancellationToken)
         {
             Challenges.Add(challenge);
+            return Task.CompletedTask;
+        }
+
+        public Task UpdateChallengeAsync(RankedChallenge challenge, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task DeleteSessionsByDateAsync(DateOnly date, CancellationToken cancellationToken)
+        {
+            Sessions.RemoveAll(session => session.RankedChallenge.ChallengeDateUtc == date);
+            return Task.CompletedTask;
+        }
+
+        public Task ClearAllRankedDataAsync(CancellationToken cancellationToken)
+        {
+            Sessions.Clear();
+            UserStats.Clear();
             return Task.CompletedTask;
         }
 
@@ -102,6 +141,36 @@ public sealed class CreateRankedGuessCommandHandlerTests
             UserStats[stats.UserId] = stats;
             return Task.CompletedTask;
         }
+
+        public Task<RankedCountryDiscoveryStat?> FindCountryDiscoveryStatAsync(Guid userId, string countryId, CancellationToken cancellationToken)
+            => Task.FromResult<RankedCountryDiscoveryStat?>(null);
+
+        public Task AddCountryDiscoveryStatAsync(RankedCountryDiscoveryStat stat, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task UpdateCountryDiscoveryStatAsync(RankedCountryDiscoveryStat stat, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<RankedClueUsageStat?> FindClueUsageStatAsync(Guid userId, string clueId, CancellationToken cancellationToken)
+            => Task.FromResult<RankedClueUsageStat?>(null);
+
+        public Task AddClueUsageStatAsync(RankedClueUsageStat stat, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task UpdateClueUsageStatAsync(RankedClueUsageStat stat, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<(IReadOnlyList<RankedUserStats> Items, int TotalCount)> GetLeaderboardStatsAsync(int page, int pageSize, CancellationToken cancellationToken)
+            => Task.FromResult(((IReadOnlyList<RankedUserStats>)[], 0));
+
+        public Task DeleteAllUserDataAsync(Guid userId, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<IReadOnlyList<RankedCountryDiscoveryStat>> GetCountryDiscoveryStatsAsync(Guid userId, CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<RankedCountryDiscoveryStat>>([]);
+
+        public Task<IReadOnlyList<RankedClueUsageStat>> GetClueUsageStatsAsync(Guid userId, CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<RankedClueUsageStat>>([]);
     }
 
     private sealed class FakeRankedDatasetProvider : IRankedDatasetProvider
