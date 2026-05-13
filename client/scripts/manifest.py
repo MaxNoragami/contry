@@ -7,8 +7,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLIC_ROOT = ROOT / "public"
-DATASETS_ROOT = PUBLIC_ROOT / "datasets"
+REPO_ROOT = ROOT.parent
+DATASETS_ROOT = REPO_ROOT / "server" / "datasets"
 BASE_PATH = DATASETS_ROOT / "base" / "countries.csv"
 CLUES_ROOT = DATASETS_ROOT / "clues"
 MANIFEST_PATH = DATASETS_ROOT / "manifest.json"
@@ -26,8 +26,8 @@ def sha256_file(path: Path) -> str:
 
 
 def web_path(path: Path) -> str:
-    relative = path.relative_to(PUBLIC_ROOT)
-    return "/" + relative.as_posix()
+    relative = path.relative_to(DATASETS_ROOT)
+    return "/datasets/" + relative.as_posix()
 
 
 def parse_existing_manifest() -> dict | None:
@@ -80,6 +80,7 @@ def build_clue_entries() -> list[dict]:
             "source": source,
             "type": clue_type,
             "computed": is_computed,
+            "comparator": metadata.get("comparator"),
             "icon": metadata.get("icon"),
             "label": metadata.get("label"),
             "description": metadata.get("description"),
@@ -125,7 +126,7 @@ def build_fingerprint(base_checksum: str, clue_entries: list[dict]) -> str:
 
 def main() -> None:
     if not BASE_PATH.exists():
-        raise FileNotFoundError("Missing base dataset: public/datasets/base/countries.csv")
+        raise FileNotFoundError("Missing base dataset: server/datasets/base/countries.csv")
 
     base_checksum = sha256_file(BASE_PATH)
     clue_entries = build_clue_entries()

@@ -139,7 +139,7 @@ function deltasToDirection(latDelta: number, lonDelta: number): string {
   return `${latDir}${lonDir}`
 }
 
-function formatNumeric(val: number, unitSymbol?: string): string {
+export function formatNumeric(val: number, unitSymbol?: string): string {
   // Temperature-style units: always show one decimal, no abbreviation
   if (unitSymbol === 'degC') {
     return `${val.toFixed(1)} °C`

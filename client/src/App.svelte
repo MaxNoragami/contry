@@ -8,11 +8,20 @@
   import SettingsModal from "./lib/components/SettingsModal.svelte";
   import GiveUpModal from "./lib/components/GiveUpModal.svelte";
   import HelpModal from "./lib/components/HelpModal.svelte";
-  import StatsModal from "./lib/components/StatsModal.svelte";
-  import { createGameState } from "./lib/stores/game.svelte";
+  import ProfileModal from "./lib/components/ProfileModal.svelte";
+  import ToastStack from "./lib/components/ToastStack.svelte";
+  import { createArcadeGameState } from "./lib/stores/game.svelte";
   import { initTheme } from "./lib/stores/theme";
+  import { createAuthStore } from "./lib/stores/auth.svelte";
+  import { createGameModeStore } from "./lib/stores/game-mode.svelte";
+  import { createRankedGameState } from "./lib/stores/ranked-game.svelte";
 
-  const game = createGameState();
+  const auth = createAuthStore();
+  const mode = createGameModeStore();
+  const arcadeGame = createArcadeGameState();
+  const rankedGame = createRankedGameState(auth);
+
+  const game = $derived.by(() => (mode.current === "ranked" ? rankedGame : arcadeGame));
 
   let inputRef: HTMLInputElement | undefined = $state();
   let searchFocused = $state(false);
@@ -21,11 +30,59 @@
   let settingsOpen = $state(false);
   let giveUpOpen = $state(false);
   let helpOpen = $state(false);
-  let statsOpen = $state(false);
+  let profileOpen = $state(false);
+  let pendingRankedPrompt = $state(false);
+  let previousAuthState = $state(false);
+  let countdownString = $state("");
 
   $effect(() => {
     void initTheme();
-    game.initGame();
+    void auth.init();
+    void arcadeGame.initGame();
+  });
+
+  $effect(() => {
+    if (mode.current === 'ranked' && auth.isAuthenticated) {
+      void rankedGame.initGame();
+    }
+  });
+
+  $effect(() => {
+    if (mode.current === 'ranked' && game.gameOver) {
+      const updateCountdown = () => {
+        const now = new Date();
+        const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+        const diff = tomorrow.getTime() - now.getTime();
+
+        const h = Math.floor(diff / (1000 * 60 * 60)).toString().padStart(2, '0');
+        const m = Math.floor((diff / (1000 * 60)) % 60).toString().padStart(2, '0');
+        const s = Math.floor((diff / 1000) % 60).toString().padStart(2, '0');
+
+        countdownString = `Next in ${h}:${m}:${s}`;
+      };
+
+      updateCountdown();
+      const interval = setInterval(updateCountdown, 1000);
+      return () => clearInterval(interval);
+    }
+  });
+
+  $effect(() => {
+    if (previousAuthState && !auth.isAuthenticated && auth.lastLogoutReason === 'expired') {
+      profileOpen = true;
+      pendingRankedPrompt = true;
+    }
+
+    previousAuthState = auth.isAuthenticated;
+  });
+
+  $effect(() => {
+    if (!auth.isAuthenticated) {
+      rankedGame.clearSession();
+      if (mode.current === 'ranked') {
+        mode.setMode('arcade');
+      }
+    }
   });
 
   // ── Synchronized horizontal scroll ──────────────────
@@ -106,15 +163,48 @@
     game.query = value;
   }
 
-  function handleSubmit(country: string): {
+  async function handleSubmit(country: string): Promise<{
     valid: boolean;
     correct?: boolean;
-  } {
+  }> {
     return game.submitGuess(country);
+  }
+
+  function handleProfileClick() {
+    pendingRankedPrompt = false;
+    profileOpen = true;
+  }
+
+  function handleModeToggle() {
+    if (mode.current === 'ranked') {
+      mode.setMode('arcade');
+      return;
+    }
+
+    if (!auth.isAuthenticated) {
+      pendingRankedPrompt = true;
+      profileOpen = true;
+      return;
+    }
+
+    mode.setMode('ranked');
+  }
+
+  function handleAuthSuccess() {
+    if (pendingRankedPrompt) {
+      pendingRankedPrompt = false;
+      mode.setMode('ranked');
+      profileOpen = false;
+      return;
+    }
+
+    profileOpen = true;
   }
 </script>
 
 <svelte:window onkeydown={handleGlobalKeydown} />
+
+<ToastStack />
 
 {#if game.loading}
   <div class="loading-overlay">
@@ -126,8 +216,16 @@
     <div class="area-header">
       <Header
         onHelpClick={() => (helpOpen = true)}
-        onStatsClick={() => (statsOpen = true)}
-        onSettingsClick={() => (settingsOpen = true)}
+        onProfileClick={handleProfileClick}
+        onModeToggle={handleModeToggle}
+        onSettingsClick={() => {
+          if (mode.current === 'arcade') {
+            settingsOpen = true;
+          }
+        }}
+        mode={mode.current}
+        isAuthenticated={auth.isAuthenticated}
+        settingsDisabled={mode.current === 'ranked'}
       />
     </div>
 
@@ -187,6 +285,10 @@
         targetCountryName={game.targetCountryName}
         onReset={() => game.resetGame()}
         onGiveUp={() => (giveUpOpen = true)}
+        placeholder={mode.current === 'ranked' ? 'Type cōntry name (ranked)' : 'Type cōntry name (arcade)'}
+        giveUpDisabled={mode.current === 'ranked'}
+        resetLabel={mode.current === 'ranked' ? countdownString : 'Play again!'}
+        resetDisabled={mode.current === 'ranked'}
         bind:inputRef
         bind:isFocused={searchFocused}
       />
@@ -201,13 +303,15 @@
     onClose={() => (helpOpen = false)}
   />
 
-  <StatsModal {game} bind:visible={statsOpen} />
+  <ProfileModal arcadeGame={arcadeGame} {auth} bind:visible={profileOpen} onAuthSuccess={handleAuthSuccess} />
 
   <GiveUpModal
     bind:visible={giveUpOpen}
     onConfirm={() => {
       giveUpOpen = false;
-      game.giveUp();
+      if (mode.current === 'arcade') {
+        arcadeGame.giveUp();
+      }
     }}
     onCancel={() => (giveUpOpen = false)}
   />

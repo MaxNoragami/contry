@@ -1,13 +1,12 @@
 import Papa from 'papaparse'
+import { getApiBaseUrl } from '../api/client'
 import { getDB, type DatasetRow } from '../stores/db'
 import type { DatasetManifest, DatasetBaseEntry, DatasetClueEntry } from './manifest'
 import { loadCustomCluesFromSettings, resolveSelectedClues } from './clue-registry'
 
 export async function syncDatasets(clueIds: string[]): Promise<DatasetManifest> {
-  const res = await fetch('/datasets/manifest.json')
-  const manifest: DatasetManifest = await res.json()
-
   const db = await getDB()
+  const manifest = await fetchCanonicalManifest(db)
   const customClues = await loadCustomCluesFromSettings(db)
 
   const metaTx = db.transaction('dataset_meta', 'readonly')
@@ -43,7 +42,7 @@ export async function syncDatasets(clueIds: string[]): Promise<DatasetManifest> 
     const checksum = isBase ? (entry as DatasetBaseEntry).checksum : (entry as DatasetClueEntry).data_checksum!
     const path = isBase ? (entry as DatasetBaseEntry).path : (entry as DatasetClueEntry).data_path!
 
-    const csvRes = await fetch(path)
+    const csvRes = await fetch(`${getApiBaseUrl()}${path}`)
     const csvText = await csvRes.text()
 
     const parsed = Papa.parse<any>(csvText, {
@@ -101,4 +100,20 @@ export async function syncDatasets(clueIds: string[]): Promise<DatasetManifest> 
   }
 
   return manifest
+}
+
+async function fetchCanonicalManifest(db: Awaited<ReturnType<typeof getDB>>): Promise<DatasetManifest> {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/datasets/manifest.json`)
+    const manifest: DatasetManifest = await response.json()
+    await db.transaction('settings', 'readwrite').objectStore('settings').put(manifest, 'dataset_manifest')
+    return manifest
+  } catch (error) {
+    const cachedManifest = await db.transaction('settings', 'readonly').objectStore('settings').get('dataset_manifest')
+    if (cachedManifest) {
+      return cachedManifest as DatasetManifest
+    }
+
+    throw error
+  }
 }

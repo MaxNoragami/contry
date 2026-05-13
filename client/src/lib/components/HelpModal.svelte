@@ -1,6 +1,6 @@
 <script lang="ts">
   import { X } from 'lucide-svelte'
-  import { fade, fly } from 'svelte/transition'
+  import { fade } from 'svelte/transition'
 
   interface Props {
     visible: boolean
@@ -41,7 +41,7 @@
   <div class="modal-backdrop" onclick={handleBackdropClick} transition:fade={{ duration: 200 }}>
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="modal-content" onclick={(e) => e.stopPropagation()} in:fly={{ y: 20, duration: 250 }}>
+    <div class="modal-content" onclick={(e) => e.stopPropagation()}>
       <div class="modal-header">
         <h2>Help</h2>
         <button class="icon-btn" aria-label="Close" onclick={onClose}><X size={20} /></button>
@@ -171,7 +171,7 @@
   @media (min-width: 768px) {
     .modal-content {
       height: 80vh;
-      max-height: 720px;
+      max-height: 700px;
       border-radius: 20px;
     }
   }

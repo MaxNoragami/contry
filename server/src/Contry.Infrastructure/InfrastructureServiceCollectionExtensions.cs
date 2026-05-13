@@ -1,5 +1,6 @@
 using Contry.Infrastructure.Authentication;
 using Contry.Infrastructure.Configuration;
+using Contry.Infrastructure.Datasets;
 using Contry.Infrastructure.Persistence;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -36,6 +37,7 @@ public static class InfrastructureServiceCollectionExtensions
 
         services.AddContryPersistence(configuration);
         services.AddContryAuthentication();
+        services.AddScoped<BuiltInDatasetCatalog>();
 
         return services;
     }
