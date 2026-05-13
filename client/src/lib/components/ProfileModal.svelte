@@ -8,7 +8,7 @@
   import { getProblemFieldErrors, getProblemMessage, type createAuthStore } from '../stores/auth.svelte'
   import { toastStore } from '../stores/toasts.svelte'
 
-  type ProfileView = 'main' | 'login' | 'register' | 'about' | 'discovery' | 'distributions' | 'clues' | 'leaderboard'
+  type ProfileView = 'main' | 'login' | 'register' | 'about' | 'clear-ranked-warning' | 'logout-warning' | 'discovery' | 'distributions' | 'clues' | 'leaderboard'
 
   interface Props {
     auth: ReturnType<typeof createAuthStore>
@@ -32,7 +32,6 @@
   let loginPasswordRef: HTMLInputElement | undefined = $state()
   let registerEmailRef: HTMLInputElement | undefined = $state()
   let registerPasswordRef: HTMLInputElement | undefined = $state()
-  let confirmingClearData = $state(false)
   let clearingData = $state(false)
 
   function buildModalState(targetView: ProfileView) {
@@ -53,6 +52,7 @@
     sessionId = null
     fieldErrors = {}
     busy = false
+    clearingData = false
   }
 
   $effect(() => {
@@ -101,6 +101,11 @@
   }
 
   function close() {
+    if (view === 'clear-ranked-warning' || view === 'logout-warning') {
+      window.history.back()
+      return
+    }
+
     if (historyDepth > 0) {
       window.history.go(-historyDepth)
     }
@@ -115,6 +120,15 @@
   function openView(nextView: ProfileView) {
     direction = 'forward'
     view = nextView
+  }
+
+  function getTransitionX(targetDirection: 'forward' | 'back', phase: 'in' | 'out') {
+    const isForward = direction === targetDirection
+    if (phase === 'in') {
+      return isForward ? 20 : -20
+    }
+
+    return isForward ? -20 : 20
   }
 
   function handleBackdropClick(event: MouseEvent) {
@@ -167,13 +181,27 @@
     }
   }
 
-  async function handleLogout() {
+  function openClearDataWarning() {
+    direction = 'forward'
+    view = 'clear-ranked-warning'
+  }
+
+  function openLogoutWarning() {
+    direction = 'forward'
+    view = 'logout-warning'
+  }
+
+  async function confirmLogout() {
     busy = true
     fieldErrors = {}
 
     try {
       await auth.logout()
-      close()
+      if (historyDepth > 0) {
+        window.history.go(-historyDepth)
+      }
+      visible = false
+      setTimeout(resetModalState, 300)
     } catch (error) {
       toastStore.push(getProblemMessage(error))
     } finally {
@@ -187,16 +215,11 @@
   }
 
   async function handleClearData() {
-    if (!confirmingClearData) {
-      confirmingClearData = true
-      return
-    }
-
     clearingData = true
     try {
       await auth.request<void>('/ranked-stats/me', { method: 'DELETE' })
       toastStore.push('All ranked data cleared.')
-      confirmingClearData = false
+      window.history.back()
     } catch (error) {
       toastStore.push('Failed to clear data. Please try again.')
     } finally {
@@ -264,7 +287,7 @@
                 </div>
               </button>
 
-              <button class="settings-item settings-item-danger" onclick={handleLogout} disabled={busy}>
+              <button class="settings-item settings-item-danger" onclick={openLogoutWarning} disabled={busy}>
                 <div class="settings-item-icon settings-item-icon-danger"><LogOut /></div>
                 <div class="settings-item-text">
                   <span>Log out</span>
@@ -435,7 +458,7 @@
       {/if}
 
       {#if auth.isAuthenticated && view === 'about'}
-        <div class="view-container view-container--compact" in:fly={{ x: 20, duration: 250, delay: 100 }} out:fly={{ x: 20, duration: 200 }}>
+        <div class="view-container view-container--compact" in:fly={{ x: getTransitionX('forward', 'in'), duration: 250, delay: 100 }} out:fly={{ x: getTransitionX('forward', 'out'), duration: 200 }}>
           <div class="modal-header">
             <button class="icon-btn" aria-label="Back" onclick={goBack}><ArrowLeft /></button>
             <h2>About me</h2>
@@ -443,24 +466,84 @@
           </div>
 
           <div class="modal-body">
-            <div class="about-card">
-              <div class="about-row"><span>Username</span><strong>{auth.user?.username}</strong></div>
-              <div class="about-row"><span>Email</span><strong>{auth.user?.email}</strong></div>
-              <div class="about-row"><span>Role</span><strong>{auth.user?.role}</strong></div>
-              <div class="about-row"><span>User id</span><strong class="mono">{auth.user?.id}</strong></div>
-            </div>
-
-            <button
-              class="settings-item settings-item-danger clear-data-btn"
-              onclick={handleClearData}
-              disabled={clearingData}
-            >
-              <div class="settings-item-icon settings-item-icon-danger"><Trash2 /></div>
-              <div class="settings-item-text">
-                <span>{confirmingClearData ? 'Are you sure?' : 'Clear ranked data'}</span>
-                <span class="muted">{confirmingClearData ? 'Press again to confirm' : 'Delete all your ranked stats and sessions'}</span>
+            <div class="about-card menu-actions">
+              <div class="about-row">
+                <span class="about-label">Username</span>
+                <strong>{auth.user?.username}</strong>
               </div>
-            </button>
+              <div class="about-row">
+                <span class="about-label">Email</span>
+                <strong>{auth.user?.email}</strong>
+              </div>
+              <div class="about-row">
+                <span class="about-label">Role</span>
+                <strong>{auth.user?.role}</strong>
+              </div>
+              <div class="about-row">
+                <span class="about-label">User id</span>
+                <strong class="mono">{auth.user?.id}</strong>
+              </div>
+
+              <button
+                class="settings-item settings-item-danger"
+                onclick={openClearDataWarning}
+                disabled={clearingData}
+              >
+                <div class="settings-item-icon settings-item-icon-danger"><Trash2 /></div>
+                <div class="settings-item-text">
+                  <span>Clear ranked data</span>
+                  <span class="muted">Delete all your ranked stats and sessions</span>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      {/if}
+
+      {#if auth.isAuthenticated && view === 'clear-ranked-warning'}
+        <div class="view-container warning-view" in:fly={{ x: getTransitionX('forward', 'in'), duration: 250, delay: 100 }} out:fly={{ x: getTransitionX('forward', 'out'), duration: 200 }}>
+          <div class="modal-header">
+            <h2>Clear ranked data</h2>
+            <button class="icon-btn" aria-label="Close" onclick={close} disabled={clearingData}><X /></button>
+          </div>
+
+          <div class="warning-body">
+            <div class="warning-icon">
+              <Trash2 size={20} />
+            </div>
+            <p class="warning-text">
+              This will delete all of your ranked stats, ranked sessions, and clue/discovery history tied to your account.
+            </p>
+            <div class="warning-actions">
+              <button class="warning-btn muted" onclick={goBack} disabled={clearingData}>Discard</button>
+              <button class="warning-btn danger" onclick={handleClearData} disabled={clearingData}>
+                {clearingData ? 'Clearing...' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      {/if}
+
+      {#if auth.isAuthenticated && view === 'logout-warning'}
+        <div class="view-container warning-view" in:fly={{ x: getTransitionX('forward', 'in'), duration: 250, delay: 100 }} out:fly={{ x: getTransitionX('forward', 'out'), duration: 200 }}>
+          <div class="modal-header">
+            <h2>End browser session</h2>
+            <button class="icon-btn" aria-label="Close" onclick={close} disabled={busy}><X /></button>
+          </div>
+
+          <div class="warning-body">
+            <div class="warning-icon">
+              <LogOut size={20} />
+            </div>
+            <p class="warning-text">
+              This will log you out of the current browser session and return ranked mode to its signed-out state.
+            </p>
+            <div class="warning-actions">
+              <button class="warning-btn muted" onclick={goBack} disabled={busy}>Stay logged in</button>
+              <button class="warning-btn danger" onclick={confirmLogout} disabled={busy}>
+                {busy ? 'Logging out...' : 'Log out'}
+              </button>
+            </div>
           </div>
         </div>
       {/if}
@@ -578,6 +661,7 @@
 
   .icon-btn:active:not(:disabled) { background: var(--hover-strong); }
   .icon-btn:focus-visible:not(:disabled) { box-shadow: inset 0 0 0 1px var(--info); }
+  .icon-btn:disabled { cursor: default; pointer-events: none; box-shadow: none; }
 
   .modal-body {
     flex: 1;
@@ -628,14 +712,14 @@
 
   @media (hover: hover) {
     .settings-item:hover:not(:disabled) { background: var(--hover-soft); }
-    .settings-item-danger:hover:not(:disabled) { background: color-mix(in oklab, var(--danger) 10%, transparent); }
+    .settings-item-danger:hover:not(:disabled) { background: color-mix(in oklab, var(--bad) 10%, transparent); }
   }
 
   .settings-item:active:not(:disabled) { background: var(--hover-soft); }
-  .settings-item-danger:active:not(:disabled) { background: color-mix(in oklab, var(--danger) 20%, transparent); }
+  .settings-item-danger:active:not(:disabled) { background: color-mix(in oklab, var(--bad) 20%, transparent); }
   .settings-item:disabled { opacity: 0.7; cursor: default; }
   .settings-item-icon { color: var(--info); }
-  .settings-item-icon-danger { color: var(--danger); }
+  .settings-item-icon-danger { color: var(--bad); }
   .settings-item-text { display: flex; flex-direction: column; gap: 4px; }
   .settings-item-text span { font-size: 16px; }
   .settings-item-text .muted { font-size: 13px; color: var(--muted); }
@@ -736,7 +820,7 @@
   }
 
   .field-error {
-    color: color-mix(in oklab, var(--danger) 86%, white);
+    color: color-mix(in oklab, var(--bad) 86%, white);
     font-size: 12px;
     line-height: 1.4;
   }
@@ -748,29 +832,103 @@
   }
 
   .about-card {
-    margin: 0 16px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    overflow: hidden;
+    display: flex;
+    flex-direction: column;
   }
 
   .about-row {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    padding: 14px 16px;
+    padding: 16px 24px;
     border-bottom: 1px solid var(--border);
+    background: transparent;
   }
 
   .about-row:last-child { border-bottom: none; }
-  .about-row span { color: var(--muted); font-size: 13px; }
-  .about-row strong { font-size: 14px; }
+  .about-card:has(.settings-item) .about-row:nth-last-child(2) { border-bottom: 1px solid var(--border); }
+  .about-label { color: var(--muted); font-size: 13px; }
+  .about-row strong { font-size: 15px; font-weight: 600; }
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; word-break: break-all; }
 
-  .clear-data-btn {
-    width: calc(100% - 32px);
-    margin: 16px 16px 0;
-    border: 1px solid var(--border);
+  .warning-view {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--panel);
+  }
+
+  .warning-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 24px;
+    text-align: center;
+  }
+
+  .warning-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    color: var(--bad);
+    background: color-mix(in oklab, var(--bad) 12%, var(--panel));
+    border: 1px solid color-mix(in oklab, var(--bad) 36%, var(--border));
+  }
+
+  .warning-text {
+    margin: 0;
+    max-width: 320px;
+    font-size: 16px;
+    line-height: 1.45;
+    color: var(--text);
+  }
+
+  .warning-actions {
+    display: flex;
+    gap: 12px;
+    width: 100%;
+    max-width: 320px;
+  }
+
+  .warning-btn {
+    flex: 1;
+    border: none;
     border-radius: 12px;
+    padding: 12px 16px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, opacity 0.2s;
+  }
+
+  .warning-btn:disabled {
+    cursor: default;
+    opacity: 0.7;
+  }
+
+  .warning-btn.muted {
+    background: var(--border);
+    color: var(--text);
+  }
+
+  .warning-btn.danger {
+    background: color-mix(in oklab, var(--bad) 30%, var(--panel));
+    color: var(--chip-bg);
+  }
+
+  @media (hover: hover) {
+    .warning-btn.muted:hover:not(:disabled) {
+      background: color-mix(in oklab, var(--border) 82%, var(--text));
+    }
+
+    .warning-btn.danger:hover:not(:disabled) {
+      background: color-mix(in oklab, var(--bad) 42%, var(--panel));
+    }
   }
 </style>
