@@ -34,37 +34,7 @@ export interface GuessRecord {
   results: ClueResult[]
 }
 
-export interface CountryDiscoveryStat {
-  country_id: string
-  continent: string | null
-  discovered: boolean
-  best_attempts: number | null
-  solved_count: number
-  last_solved_at?: number
-}
-
-export interface GlobalRoundStats {
-  key: 'summary'
-  finished_count: number
-  win_count: number
-  give_up_count: number
-  total_guesses_on_wins: number
-  fastest_win: number | null
-  slowest_win: number | null
-  guess_distribution: Record<string, number>
-}
-
-export interface CountryRoundDifficultyStat {
-  country_id: string
-  give_up_count: number
-  solved_count: number
-  total_guesses_when_solved: number
-}
-
-export interface ClueUsageStat {
-  clue_id: string
-  usage_count: number
-}
+// Old stats interfaces removed
 
 export interface ContryDBSchema extends DBSchema {
   settings: {
@@ -93,26 +63,10 @@ export interface ContryDBSchema extends DBSchema {
       'by-game': string
     }
   }
-  country_discovery_stats: {
-    key: string
-    value: CountryDiscoveryStat
-  }
-  global_round_stats: {
-    key: string
-    value: GlobalRoundStats
-  }
-  country_round_difficulty_stats: {
-    key: string
-    value: CountryRoundDifficultyStat
-  }
-  clue_usage_stats: {
-    key: string
-    value: ClueUsageStat
-  }
 }
 
 export const DB_NAME = 'contry_db'
-export const DB_VERSION = 4
+export const DB_VERSION = 5
 
 let dbPromise: Promise<IDBPDatabase<ContryDBSchema>> | null = null
 
@@ -137,17 +91,12 @@ export function getDB(): Promise<IDBPDatabase<ContryDBSchema>> {
           const guessesStore = db.createObjectStore('guesses', { keyPath: ['game_id', 'attempt_no'] })
           guessesStore.createIndex('by-game', 'game_id')
         }
-        if (!db.objectStoreNames.contains('country_discovery_stats')) {
-          db.createObjectStore('country_discovery_stats', { keyPath: 'country_id' })
-        }
-        if (!db.objectStoreNames.contains('global_round_stats')) {
-          db.createObjectStore('global_round_stats', { keyPath: 'key' })
-        }
-        if (!db.objectStoreNames.contains('country_round_difficulty_stats')) {
-          db.createObjectStore('country_round_difficulty_stats', { keyPath: 'country_id' })
-        }
-        if (!db.objectStoreNames.contains('clue_usage_stats')) {
-          db.createObjectStore('clue_usage_stats', { keyPath: 'clue_id' })
+        // Clean up legacy stats stores from v4 schema
+        const legacyStores = ['country_discovery_stats', 'global_round_stats', 'country_round_difficulty_stats', 'clue_usage_stats']
+        for (const store of legacyStores) {
+          if ((db.objectStoreNames as DOMStringList).contains(store)) {
+            (db as any).deleteObjectStore(store)
+          }
         }
       },
     })

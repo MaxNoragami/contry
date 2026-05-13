@@ -9,10 +9,6 @@ import {
 } from 'lucide-svelte'
 import {
   getDB,
-  type CountryDiscoveryStat,
-  type GlobalRoundStats,
-  type CountryRoundDifficultyStat,
-  type ClueUsageStat,
 } from './db'
 import { syncDatasets } from '../datasets/ingest'
 import { evaluateCategorical, evaluateNumeric, evaluateHemisphere, evaluateCoordinates } from '../engine/clues'
@@ -432,266 +428,9 @@ export function createArcadeGameState() {
     }
   }
 
-  async function getDiscoveryStats(): Promise<DiscoveryStatsPayload> {
-    const db = await getDB()
-    await syncDatasets([...new Set([...userClues, 'continent'])])
+  // Stats functions removed — stats are now server-side for Ranked mode only.
 
-    const tx = db.transaction(['dataset_rows', 'country_discovery_stats'], 'readonly')
-    const rowsStore = tx.objectStore('dataset_rows')
-    const rowsIndex = rowsStore.index('by-dataset')
-    const [baseRows, continentRows, statRows] = await Promise.all([
-      rowsIndex.getAll('countries_base'),
-      rowsIndex.getAll('continent'),
-      tx.objectStore('country_discovery_stats').getAll(),
-    ])
-
-    const continentByCountry = new Map<string, DiscoveryContinentKey>()
-    for (const row of continentRows) {
-      if (typeof row.value === 'string') {
-        continentByCountry.set(row.country_id, row.value as DiscoveryContinentKey)
-      }
-    }
-
-    const statByCountry = new Map<string, CountryDiscoveryStat>()
-    for (const stat of statRows) {
-      statByCountry.set(stat.country_id, stat)
-    }
-
-    const countries: DiscoveryCountrySummary[] = baseRows.map((row) => {
-      const stat = statByCountry.get(row.country_id)
-      return {
-        country_id: row.country_id,
-        name: row.name || row.country_id,
-        lat: row.lat || 0,
-        lon: row.lon || 0,
-        continent: continentByCountry.get(row.country_id) || null,
-        discovered: stat?.discovered ?? false,
-        best_attempts: stat?.best_attempts ?? null,
-        solved_count: stat?.solved_count ?? 0,
-        last_solved_at: stat?.last_solved_at ?? null,
-      }
-    })
-
-    const discoveredCount = countries.filter((country) => country.discovered).length
-    const totalCount = countries.length
-    const continentAccents: Record<DiscoveryContinentKey, string> = {
-      'Africa': '#cc241d',
-      'Europe': '#458588',
-      'Asia': '#d79921',
-      'North America': '#98971a',
-      'South America': '#83a598',
-      'Oceania': '#b16286',
-    }
-    const continentLabels: Record<DiscoveryContinentKey, string> = {
-      'Africa': 'Africa',
-      'Europe': 'Europe',
-      'Asia': 'Asia',
-      'North America': 'N. America',
-      'South America': 'S. America',
-      'Oceania': 'Oceania',
-    }
-
-    const continents = (Object.keys(continentAccents) as DiscoveryContinentKey[]).map((continent) => {
-      const continentCountries = countries.filter((country) => country.continent === continent)
-      const solved = continentCountries.filter((country) => country.discovered).length
-      return {
-        id: continent,
-        label: continentLabels[continent],
-        discovered_count: solved,
-        total_count: continentCountries.length,
-        discovered_percent: percent(solved, continentCountries.length),
-        accent: continentAccents[continent],
-      }
-    })
-
-    await tx.done
-
-    return {
-      countries,
-      discovered_count: discoveredCount,
-      total_count: totalCount,
-      discovered_percent: percent(discoveredCount, totalCount),
-      continents,
-    }
-  }
-
-  async function getDistributionStats(): Promise<DistributionStatsPayload> {
-    const db = await getDB()
-    const tx = db.transaction(['global_round_stats', 'country_round_difficulty_stats', 'dataset_rows'], 'readonly')
-    const summary = await tx.objectStore('global_round_stats').get('summary') as GlobalRoundStats | undefined
-    const difficultyRows = await tx.objectStore('country_round_difficulty_stats').getAll() as CountryRoundDifficultyStat[]
-    const baseRows = await tx.objectStore('dataset_rows').index('by-dataset').getAll('countries_base')
-
-    const namesByCountry = new Map(baseRows.map((row) => [row.country_id, row.name || row.country_id]))
-    const guessDistributionSource = summary?.guess_distribution ?? emptyDistribution()
-
-    const guess_distribution: DistributionBucket[] = ['1','2','3','4','5','6','7','8','9','10+'].map((label) => ({
-      label,
-      count: guessDistributionSource[label] ?? 0,
-    }))
-
-    const top_give_up_countries = difficultyRows
-      .filter((row) => row.give_up_count > 0)
-      .sort((a, b) => {
-        if (b.give_up_count !== a.give_up_count) return b.give_up_count - a.give_up_count
-        return (namesByCountry.get(a.country_id) || a.country_id).localeCompare(namesByCountry.get(b.country_id) || b.country_id)
-      })
-      .slice(0, 5)
-      .map((row) => ({
-        country_id: row.country_id,
-        name: namesByCountry.get(row.country_id) || row.country_id,
-        give_up_count: row.give_up_count,
-      }))
-
-    await tx.done
-
-    return {
-      average_guesses:
-        summary && summary.win_count > 0
-          ? summary.total_guesses_on_wins / summary.win_count
-          : null,
-      fastest_guess: summary?.fastest_win ?? null,
-      slowest_guess: summary?.slowest_win ?? null,
-      give_up_rate:
-        summary && summary.finished_count > 0
-          ? percent(summary.give_up_count, summary.finished_count)
-          : 0,
-      guess_distribution,
-      top_give_up_countries,
-    }
-  }
-
-  async function getClueUsageStats(): Promise<ClueUsageStatsPayload> {
-    const db = await getDB()
-    const tx = db.transaction('clue_usage_stats', 'readonly')
-    const usageRows = await tx.objectStore('clue_usage_stats').getAll() as ClueUsageStat[]
-    await tx.done
-
-    const usageById = new Map(usageRows.map((row) => [row.clue_id, row.usage_count]))
-
-    const clues = availableClues
-      .map((clue) => ({
-        id: clue.id,
-        label: clue.label,
-        icon: clue.icon,
-        customIcon: clue.customIcon,
-        source: clue.source,
-        usage_count: usageById.get(clue.id) ?? 0,
-      }))
-      .sort((a, b) => {
-        if (b.usage_count !== a.usage_count) return b.usage_count - a.usage_count
-        return a.label.localeCompare(b.label)
-      })
-
-    return { clues }
-  }
-
-  async function updateCountryDiscoveryStats(
-    tx: IDBTransaction | any,
-    countryId: string,
-    attempts: number
-  ) {
-    const statsStore = tx.objectStore('country_discovery_stats')
-    const existing = await statsStore.get(countryId) as CountryDiscoveryStat | undefined
-    const continentRow = await tx.objectStore('dataset_rows').get(['continent', countryId])
-    const continent = typeof continentRow?.value === 'string' ? continentRow.value : null
-
-    await statsStore.put({
-      country_id: countryId,
-      continent,
-      discovered: true,
-      best_attempts:
-        existing?.best_attempts == null ? attempts : Math.min(existing.best_attempts, attempts),
-      solved_count: (existing?.solved_count ?? 0) + 1,
-      last_solved_at: Date.now(),
-    } satisfies CountryDiscoveryStat)
-  }
-
-  async function updateDistributionStatsOnWin(
-    tx: IDBTransaction | any,
-    countryId: string,
-    attempts: number,
-  ) {
-    const summaryStore = tx.objectStore('global_round_stats')
-    const difficultyStore = tx.objectStore('country_round_difficulty_stats')
-
-    const summary = (await summaryStore.get('summary') as GlobalRoundStats | undefined) ?? {
-      key: 'summary' as const,
-      finished_count: 0,
-      win_count: 0,
-      give_up_count: 0,
-      total_guesses_on_wins: 0,
-      fastest_win: null,
-      slowest_win: null,
-      guess_distribution: emptyDistribution(),
-    }
-
-    const bucket = attemptsToBucket(attempts)
-    summary.finished_count += 1
-    summary.win_count += 1
-    summary.total_guesses_on_wins += attempts
-    summary.fastest_win = summary.fastest_win == null ? attempts : Math.min(summary.fastest_win, attempts)
-    summary.slowest_win = summary.slowest_win == null ? attempts : Math.max(summary.slowest_win, attempts)
-    summary.guess_distribution = { ...summary.guess_distribution, [bucket]: (summary.guess_distribution[bucket] ?? 0) + 1 }
-    await summaryStore.put(summary)
-
-    const difficulty = (await difficultyStore.get(countryId) as CountryRoundDifficultyStat | undefined) ?? {
-      country_id: countryId,
-      give_up_count: 0,
-      solved_count: 0,
-      total_guesses_when_solved: 0,
-    }
-    difficulty.solved_count += 1
-    difficulty.total_guesses_when_solved += attempts
-    await difficultyStore.put(difficulty)
-  }
-
-  async function updateDistributionStatsOnGiveUp(
-    tx: IDBTransaction | any,
-    countryId: string,
-    attempts: number,
-  ) {
-    const summaryStore = tx.objectStore('global_round_stats')
-    const difficultyStore = tx.objectStore('country_round_difficulty_stats')
-
-    const summary = (await summaryStore.get('summary') as GlobalRoundStats | undefined) ?? {
-      key: 'summary' as const,
-      finished_count: 0,
-      win_count: 0,
-      give_up_count: 0,
-      total_guesses_on_wins: 0,
-      fastest_win: null,
-      slowest_win: null,
-      guess_distribution: emptyDistribution(),
-    }
-
-    summary.finished_count += 1
-    summary.give_up_count += 1
-    await summaryStore.put(summary)
-
-    const difficulty = (await difficultyStore.get(countryId) as CountryRoundDifficultyStat | undefined) ?? {
-      country_id: countryId,
-      give_up_count: 0,
-      solved_count: 0,
-      total_guesses_when_solved: 0,
-    }
-    difficulty.give_up_count += 1
-    await difficultyStore.put(difficulty)
-  }
-
-  async function incrementClueUsageStats(clueIds: string[]) {
-    const db = await getDB()
-    const tx = db.transaction('clue_usage_stats', 'readwrite')
-    const store = tx.objectStore('clue_usage_stats')
-    for (const clueId of clueIds) {
-      const existing = await store.get(clueId) as ClueUsageStat | undefined
-      await store.put({
-        clue_id: clueId,
-        usage_count: (existing?.usage_count ?? 0) + 1,
-      } satisfies ClueUsageStat)
-    }
-    await tx.done
-  }
+  // IDB stats update functions removed — stats are now server-side for Ranked mode only.
 
   async function pruneHistoricalGameData(keepGameId: string | null) {
     if (!keepGameId) return
@@ -920,7 +659,7 @@ export function createArcadeGameState() {
           started_at: Date.now(),
           status: 'playing'
         })
-        await incrementClueUsageStats(userClues)
+
       }
       await gameTx.done
       await pruneHistoricalGameData(gameId)
@@ -977,7 +716,7 @@ export function createArcadeGameState() {
       status: 'playing'
     })
     await gameTx.done
-    await incrementClueUsageStats(userClues)
+
     await pruneHistoricalGameData(gameId)
     syncChannel?.postMessage({ type: 'SYNC' })
   }
@@ -1035,7 +774,7 @@ export function createArcadeGameState() {
 
     // Save guess to IDB and broadcast
     getDB().then(async db => {
-      const tx = db.transaction(['guesses', 'games', 'country_discovery_stats', 'global_round_stats', 'country_round_difficulty_stats', 'dataset_rows'], 'readwrite')
+      const tx = db.transaction(['guesses', 'games'], 'readwrite')
       tx.objectStore('guesses').put({
         game_id: gameId!,
         attempt_no: row.rank,
@@ -1051,8 +790,6 @@ export function createArcadeGameState() {
           g.ended_at = Date.now()
           await gamesStore.put(g)
         }
-        await updateCountryDiscoveryStats(tx, match.country_id, row.rank)
-        await updateDistributionStatsOnWin(tx, match.country_id, row.rank)
       }
       await tx.done
       await pruneHistoricalGameData(gameId)
@@ -1167,14 +904,13 @@ export function createArcadeGameState() {
     rows = [...rows, revealRow]
 
     const db = await getDB()
-    const tx = db.transaction(['games', 'global_round_stats', 'country_round_difficulty_stats'], 'readwrite')
+    const tx = db.transaction(['games'], 'readwrite')
     const g = await tx.objectStore('games').get(gameId)
     if (g) {
       g.status = 'lost'
       g.ended_at = Date.now()
       await tx.objectStore('games').put(g)
     }
-    await updateDistributionStatsOnGiveUp(tx, targetCountry.country_id, giveUpAttempts)
     await tx.done
     await pruneHistoricalGameData(gameId)
     syncChannel?.postMessage({ type: 'SYNC' })
@@ -1207,9 +943,6 @@ export function createArcadeGameState() {
     submitGuess,
     saveClues,
     refreshCustomClueCatalog,
-    getDiscoveryStats,
-    getDistributionStats,
-    getClueUsageStats,
     giveUp,
   }
 }

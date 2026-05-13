@@ -22,5 +22,7 @@ public sealed class RankedUserStats
 
     public DateOnly? LastCompletedChallengeDateUtc { get; set; }
 
+    public string GuessDistributionJson { get; set; } = "{}";
+
     public User User { get; set; } = null!;
 }

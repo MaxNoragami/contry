@@ -1,31 +1,51 @@
 <script lang="ts">
   import { ArrowLeft } from 'lucide-svelte'
   import { fly } from 'svelte/transition'
-  import type { ClueUsageStatsPayload } from '../../stores/game.svelte'
+  import { type ClueUsageStatDto, type MyRankedStatsResult } from '../../api/client'
+  import type { createAuthStore } from '../../stores/auth.svelte'
+  import { iconMap } from '../../stores/game.svelte'
 
   interface Props {
-    game: any
+    auth: ReturnType<typeof createAuthStore>
     goBack: () => void
     direction: 'forward' | 'back'
   }
 
-  let { game, goBack, direction }: Props = $props()
+  let { auth, goBack, direction }: Props = $props()
 
-  let stats = $state<ClueUsageStatsPayload | null>(null)
+  const clueDisplayInfo: Record<string, { label: string; icon?: string }> = {
+    hemisphere: { label: 'Hemisphere', icon: 'globe' },
+    continent: { label: 'Continent', icon: 'compass' },
+    temperature_avg_c: { label: 'Avg. Temperature', icon: 'thermometer' },
+    population: { label: 'Population', icon: 'users' },
+    coordinates: { label: 'Coordinates', icon: 'navigation' },
+    area_km2: { label: 'Area', icon: 'land-plot' },
+  }
+
+  type ClueUsageEntry = {
+    id: string
+    label: string
+    icon: typeof import('lucide-svelte').Icon | null
+    customIcon?: string
+    usage_count: number
+  }
+
+  let clues = $state<ClueUsageEntry[]>([])
   let loading = $state(true)
+  let error = $state(false)
 
   $effect(() => {
     let cancelled = false
     loading = true
 
-    game.getClueUsageStats().then((data: ClueUsageStatsPayload) => {
+    loadClueUsageStats().then((data) => {
       if (!cancelled) {
-        stats = data
+        clues = data
         loading = false
       }
     }).catch(() => {
       if (!cancelled) {
-        stats = null
+        error = true
         loading = false
       }
     })
@@ -35,9 +55,30 @@
     }
   })
 
+  async function loadClueUsageStats(): Promise<ClueUsageEntry[]> {
+    const apiStats = await auth.request<MyRankedStatsResult>('/ranked-stats/me')
+
+    return apiStats.clueUsageStats
+      .map((stat: ClueUsageStatDto) => {
+        const info = clueDisplayInfo[stat.clueId]
+        const iconKey = info?.icon ?? stat.clueId
+        return {
+          id: stat.clueId,
+          label: info?.label ?? stat.clueId,
+          icon: iconMap[iconKey] ?? null,
+          customIcon: !iconMap[iconKey] ? iconKey : undefined,
+          usage_count: stat.usageCount,
+        }
+      })
+      .sort((a: ClueUsageEntry, b: ClueUsageEntry) => {
+        if (b.usage_count !== a.usage_count) return b.usage_count - a.usage_count
+        return a.label.localeCompare(b.label)
+      })
+  }
+
   function maxUsage() {
-    if (!stats || stats.clues.length === 0) return 1
-    return Math.max(1, ...stats.clues.map((clue) => clue.usage_count))
+    if (clues.length === 0) return 1
+    return Math.max(1, ...clues.map((c) => c.usage_count))
   }
 </script>
 
@@ -51,40 +92,38 @@
   <div class="modal-body">
     {#if loading}
       <div class="message">Loading clue stats...</div>
-    {:else if stats}
-      {#if stats.clues.length > 0}
-        <div class="clue-list">
-          {#each stats.clues as clue (clue.id)}
-            <div class="clue-row">
-              <div class="clue-leading">
-                <div class="clue-icon-wrapper">
-                  {#if clue.icon}
-                    {@const IconComponent = clue.icon}
-                    <IconComponent size={20} />
-                  {:else if clue.customIcon}
-                    <div class="custom-icon" style="mask-image: url('https://unpkg.com/lucide-static@latest/icons/{clue.customIcon}.svg'); -webkit-mask-image: url('https://unpkg.com/lucide-static@latest/icons/{clue.customIcon}.svg');"></div>
-                  {/if}
-                </div>
-                <div class="clue-name" class:custom-name={clue.source === 'custom'}>{clue.label}</div>
-              </div>
-
-              <div class="clue-bar-wrap">
-                {#if clue.usage_count > 0}
-                  <div class="clue-bar" style={`width:${(clue.usage_count / maxUsage()) * 100}%`}>
-                    <span class="clue-count">{clue.usage_count}</span>
-                  </div>
-                {:else}
-                  <div class="clue-bar clue-bar--empty"><span class="clue-count clue-count--muted">0</span></div>
+    {:else if error}
+      <div class="message">Could not load clue stats.</div>
+    {:else if clues.length > 0}
+      <div class="clue-list">
+        {#each clues as clue (clue.id)}
+          <div class="clue-row">
+            <div class="clue-leading">
+              <div class="clue-icon-wrapper">
+                {#if clue.icon}
+                  {@const IconComponent = clue.icon}
+                  <IconComponent size={20} />
+                {:else if clue.customIcon}
+                  <div class="custom-icon" style="mask-image: url('https://unpkg.com/lucide-static@latest/icons/{clue.customIcon}.svg'); -webkit-mask-image: url('https://unpkg.com/lucide-static@latest/icons/{clue.customIcon}.svg');"></div>
                 {/if}
               </div>
+              <div class="clue-name">{clue.label}</div>
             </div>
-          {/each}
-        </div>
-      {:else}
-        <div class="message">No clue usage recorded yet.</div>
-      {/if}
+
+            <div class="clue-bar-wrap">
+              {#if clue.usage_count > 0}
+                <div class="clue-bar" style={`width:${(clue.usage_count / maxUsage()) * 100}%`}>
+                  <span class="clue-count">{clue.usage_count}</span>
+                </div>
+              {:else}
+                <div class="clue-bar clue-bar--empty"><span class="clue-count clue-count--muted">0</span></div>
+              {/if}
+            </div>
+          </div>
+        {/each}
+      </div>
     {:else}
-      <div class="message">Could not load clue stats.</div>
+      <div class="message">No clue usage recorded yet.</div>
     {/if}
   </div>
 </div>
@@ -106,7 +145,6 @@
   .clue-leading { display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center; }
   .clue-icon-wrapper { width:40px; height:40px; border-radius:50%; background:var(--chip-bg); color:var(--chip-fg); display:grid; place-items:center; }
   .clue-name { font-size:13px; font-weight:600; line-height:1.2; }
-  .custom-name { font-style:italic; }
   .custom-icon { width:20px; height:20px; background-color:currentColor; mask-size:contain; mask-repeat:no-repeat; mask-position:center; -webkit-mask-size:contain; -webkit-mask-repeat:no-repeat; -webkit-mask-position:center; }
   .clue-bar-wrap { min-height:24px; display:flex; align-items:center; }
   .clue-bar { min-height:24px; min-width:28px; border-radius:999px; background:var(--info); display:flex; align-items:center; justify-content:flex-end; padding:0 8px; }

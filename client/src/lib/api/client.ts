@@ -80,3 +80,54 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
 
   return payload as T
 }
+
+export interface RankedLeaderboardEntry {
+  username: string
+  averageTries: number
+  playedCount: number
+}
+
+export interface GetRankedLeaderboardResult {
+  items: RankedLeaderboardEntry[]
+  totalCount: number
+  page: number
+  pageSize: number
+}
+
+export async function getRankedLeaderboard(page: number = 1, pageSize: number = 50, signal?: AbortSignal): Promise<GetRankedLeaderboardResult> {
+  return apiRequest<GetRankedLeaderboardResult>(`/leaderboards/ranked?page=${page}&pageSize=${pageSize}`, { signal })
+}
+
+export interface CountryDiscoveryStatDto {
+  countryId: string
+  discovered: boolean
+  bestAttempts: number | null
+  solvedCount: number
+  lastSolvedAtUtc: string | null
+}
+
+export interface ClueUsageStatDto {
+  clueId: string
+  usageCount: number
+}
+
+export interface MyRankedStatsResult {
+  playedCount: number
+  wonCount: number
+  totalGuessesOnWins: number
+  fastestWinGuessCount: number | null
+  slowestWinGuessCount: number | null
+  currentStreak: number
+  bestStreak: number
+  guessDistributionJson: string
+  countryDiscoveryStats: CountryDiscoveryStatDto[]
+  clueUsageStats: ClueUsageStatDto[]
+}
+
+export async function getMyRankedStats(signal?: AbortSignal): Promise<MyRankedStatsResult> {
+  return apiRequest<MyRankedStatsResult>('/ranked-stats/me', { signal })
+}
+
+export async function resetMyRankedStats(xsrfToken: string, signal?: AbortSignal): Promise<void> {
+  return apiRequest<void>('/ranked-stats/me', { method: 'DELETE', xsrfToken, signal })
+}

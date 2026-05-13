@@ -1,22 +1,22 @@
 <script lang="ts">
-  import { ArrowLeft, ChartColumnBig, CircleDot, Globe, IdCard, LogOut, UserRoundPlus, X } from 'lucide-svelte'
+  import { ArrowLeft, ChartColumnBig, CircleDot, Globe, IdCard, LogOut, UserRoundPlus, X, Trophy, Trash2 } from 'lucide-svelte'
   import { fade, fly } from 'svelte/transition'
   import DiscoveryStatsPage from './stats/DiscoveryStatsPage.svelte'
   import DistributionStatsPage from './stats/DistributionStatsPage.svelte'
   import ClueUsageStatsPage from './stats/ClueUsageStatsPage.svelte'
+  import LeaderboardPage from './stats/LeaderboardPage.svelte'
   import { getProblemFieldErrors, getProblemMessage, type createAuthStore } from '../stores/auth.svelte'
   import { toastStore } from '../stores/toasts.svelte'
 
-  type ProfileView = 'main' | 'login' | 'register' | 'about' | 'discovery' | 'distributions' | 'clues'
+  type ProfileView = 'main' | 'login' | 'register' | 'about' | 'discovery' | 'distributions' | 'clues' | 'leaderboard'
 
   interface Props {
-    arcadeGame: any
     auth: ReturnType<typeof createAuthStore>
     visible: boolean
     onAuthSuccess?: () => void
   }
 
-  let { arcadeGame, auth, visible = $bindable(false), onAuthSuccess }: Props = $props()
+  let { auth, visible = $bindable(false), onAuthSuccess }: Props = $props()
 
   let view = $state<ProfileView>('login')
   let direction = $state<'forward' | 'back'>('forward')
@@ -32,6 +32,8 @@
   let loginPasswordRef: HTMLInputElement | undefined = $state()
   let registerEmailRef: HTMLInputElement | undefined = $state()
   let registerPasswordRef: HTMLInputElement | undefined = $state()
+  let confirmingClearData = $state(false)
+  let clearingData = $state(false)
 
   function buildModalState(targetView: ProfileView) {
     return {
@@ -183,6 +185,24 @@
     if (!(fieldName in fieldErrors)) return
     fieldErrors = Object.fromEntries(Object.entries(fieldErrors).filter(([key]) => key !== fieldName))
   }
+
+  async function handleClearData() {
+    if (!confirmingClearData) {
+      confirmingClearData = true
+      return
+    }
+
+    clearingData = true
+    try {
+      await auth.request<void>('/ranked-stats/me', { method: 'DELETE' })
+      toastStore.push('All ranked data cleared.')
+      confirmingClearData = false
+    } catch (error) {
+      toastStore.push('Failed to clear data. Please try again.')
+    } finally {
+      clearingData = false
+    }
+  }
 </script>
 
 <svelte:window onpopstate={onPopState} onkeydown={handleKeydown} />
@@ -212,11 +232,19 @@
                 </div>
               </button>
 
+              <button class="settings-item" onclick={() => openView('leaderboard')}>
+                <div class="settings-item-icon"><Trophy /></div>
+                <div class="settings-item-text">
+                  <span>Leaderboard</span>
+                  <span class="muted">See the global ranked leaderboard</span>
+                </div>
+              </button>
+
               <button class="settings-item" onclick={() => openView('discovery')}>
                 <div class="settings-item-icon"><Globe /></div>
                 <div class="settings-item-text">
                   <span>Cōntry discovery</span>
-                  <span class="muted">See which countries you've solved in arcade</span>
+                  <span class="muted">See which countries you've solved in ranked</span>
                 </div>
               </button>
 
@@ -224,7 +252,7 @@
                 <div class="settings-item-icon"><ChartColumnBig /></div>
                 <div class="settings-item-text">
                   <span>Distributions</span>
-                  <span class="muted">Review your local arcade guess patterns</span>
+                  <span class="muted">Review your ranked guess patterns</span>
                 </div>
               </button>
 
@@ -232,7 +260,7 @@
                 <div class="settings-item-icon"><CircleDot /></div>
                 <div class="settings-item-text">
                   <span>Clues</span>
-                  <span class="muted">See which clues show up most often in arcade</span>
+                  <span class="muted">See which clues show up most often in ranked</span>
                 </div>
               </button>
 
@@ -421,20 +449,36 @@
               <div class="about-row"><span>Role</span><strong>{auth.user?.role}</strong></div>
               <div class="about-row"><span>User id</span><strong class="mono">{auth.user?.id}</strong></div>
             </div>
+
+            <button
+              class="settings-item settings-item-danger clear-data-btn"
+              onclick={handleClearData}
+              disabled={clearingData}
+            >
+              <div class="settings-item-icon settings-item-icon-danger"><Trash2 /></div>
+              <div class="settings-item-text">
+                <span>{confirmingClearData ? 'Are you sure?' : 'Clear ranked data'}</span>
+                <span class="muted">{confirmingClearData ? 'Press again to confirm' : 'Delete all your ranked stats and sessions'}</span>
+              </div>
+            </button>
           </div>
         </div>
       {/if}
 
+      {#if auth.isAuthenticated && view === 'leaderboard'}
+        <LeaderboardPage goBack={goBack} {direction} />
+      {/if}
+
       {#if auth.isAuthenticated && view === 'discovery'}
-        <DiscoveryStatsPage game={arcadeGame} goBack={goBack} {direction} />
+        <DiscoveryStatsPage {auth} goBack={goBack} {direction} />
       {/if}
 
       {#if auth.isAuthenticated && view === 'distributions'}
-        <DistributionStatsPage game={arcadeGame} goBack={goBack} {direction} />
+        <DistributionStatsPage {auth} goBack={goBack} {direction} />
       {/if}
 
       {#if auth.isAuthenticated && view === 'clues'}
-        <ClueUsageStatsPage game={arcadeGame} goBack={goBack} {direction} />
+        <ClueUsageStatsPage {auth} goBack={goBack} {direction} />
       {/if}
     </div>
   </div>
@@ -584,9 +628,11 @@
 
   @media (hover: hover) {
     .settings-item:hover:not(:disabled) { background: var(--hover-soft); }
+    .settings-item-danger:hover:not(:disabled) { background: color-mix(in oklab, var(--danger) 10%, transparent); }
   }
 
   .settings-item:active:not(:disabled) { background: var(--hover-soft); }
+  .settings-item-danger:active:not(:disabled) { background: color-mix(in oklab, var(--danger) 20%, transparent); }
   .settings-item:disabled { opacity: 0.7; cursor: default; }
   .settings-item-icon { color: var(--info); }
   .settings-item-icon-danger { color: var(--danger); }
@@ -720,4 +766,11 @@
   .about-row span { color: var(--muted); font-size: 13px; }
   .about-row strong { font-size: 14px; }
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; word-break: break-all; }
+
+  .clear-data-btn {
+    width: calc(100% - 32px);
+    margin: 16px 16px 0;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
 </style>

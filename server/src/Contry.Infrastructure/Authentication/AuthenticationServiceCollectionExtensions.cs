@@ -43,6 +43,9 @@ public static class AuthenticationServiceCollectionExtensions
         services.AddScoped<GetCurrentRankedChallengeQueryHandler>();
         services.AddScoped<GetCurrentRankedSessionQueryHandler>();
         services.AddScoped<CreateRankedGuessCommandHandler>();
+        services.AddScoped<ResetMyRankedStatsCommandHandler>();
+        services.AddScoped<GetRankedLeaderboardQueryHandler>();
+        services.AddScoped<GetMyRankedStatsQueryHandler>();
         services.AddScoped<RankedGuessEvaluator>();
         services.AddScoped<IAccessTokenService, JwtAccessTokenService>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();

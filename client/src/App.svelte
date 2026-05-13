@@ -303,7 +303,7 @@
     onClose={() => (helpOpen = false)}
   />
 
-  <ProfileModal arcadeGame={arcadeGame} {auth} bind:visible={profileOpen} onAuthSuccess={handleAuthSuccess} />
+  <ProfileModal {auth} bind:visible={profileOpen} onAuthSuccess={handleAuthSuccess} />
 
   <GiveUpModal
     bind:visible={giveUpOpen}
