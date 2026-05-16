@@ -40,7 +40,7 @@ export function createAuthStore() {
   async function init() {
     if (initialized) return
     initialized = true
-    await hydrateCurrentUser(false)
+    await hydrateCurrentUser(true)
   }
 
   async function hydrateCurrentUser(allowRefresh = true) {
