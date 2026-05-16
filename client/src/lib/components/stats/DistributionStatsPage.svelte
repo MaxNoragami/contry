@@ -2,6 +2,7 @@
   import { ArrowLeft } from 'lucide-svelte'
   import { fly } from 'svelte/transition'
   import GuessDistributionChart from './GuessDistributionChart.svelte'
+  import { API_PATHS } from '../../config/app'
   import { type MyRankedStatsResult } from '../../api/client'
   import type { createAuthStore } from '../../stores/auth.svelte'
   import type { DistributionBucket } from '../../stores/game.svelte'
@@ -48,7 +49,7 @@
   })
 
   async function loadDistributionStats(): Promise<DistStatsPayload> {
-    const apiStats = await auth.request<MyRankedStatsResult>('/ranked/stats/me')
+    const apiStats = await auth.request<MyRankedStatsResult>(API_PATHS.ranked.statsMe)
 
     const rawDist: Record<string, number> = JSON.parse(apiStats.guessDistributionJson || '{}')
 

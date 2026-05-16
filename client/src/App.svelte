@@ -77,6 +77,10 @@
   });
 
   $effect(() => {
+    if (auth.status === 'loading') {
+      return;
+    }
+
     if (!auth.isAuthenticated) {
       rankedGame.clearSession();
       if (mode.current === 'ranked') {

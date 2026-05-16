@@ -1,4 +1,5 @@
 import { ApiError, apiRequest, type ProblemDetailsResponse } from '../api/client'
+import { API_PATHS } from '../config/app'
 
 export type AuthStatus = 'loading' | 'anonymous' | 'authenticated'
 
@@ -47,7 +48,7 @@ export function createAuthStore() {
     status = 'loading'
 
     try {
-      const currentUser = await request<AuthUser>('/users/me', { retryUnauthorized: allowRefresh })
+      const currentUser = await request<AuthUser>(API_PATHS.auth.currentUser, { retryUnauthorized: allowRefresh })
       user = currentUser
       status = 'authenticated'
       lastLogoutReason = null
@@ -64,7 +65,7 @@ export function createAuthStore() {
   }
 
   async function login(credential: string, password: string) {
-    const session = await apiRequest<AuthSessionResponse>('/sessions', {
+    const session = await apiRequest<AuthSessionResponse>(API_PATHS.auth.login, {
       method: 'POST',
       body: { credential, password },
     })
@@ -76,7 +77,7 @@ export function createAuthStore() {
   }
 
   async function register(username: string, email: string, password: string) {
-    const session = await apiRequest<AuthSessionResponse>('/users', {
+    const session = await apiRequest<AuthSessionResponse>(API_PATHS.auth.register, {
       method: 'POST',
       body: { username, email, password },
     })
@@ -89,14 +90,14 @@ export function createAuthStore() {
 
   async function logout() {
     try {
-      await request<void>('/sessions/current', { method: 'DELETE', retryUnauthorized: false })
+      await request<void>(API_PATHS.auth.currentSession, { method: 'DELETE', retryUnauthorized: false })
     } finally {
       clearSessionState('manual')
     }
   }
 
   async function fetchXsrfToken() {
-    const response = await apiRequest<XsrfTokenResponse>('/xsrf')
+    const response = await apiRequest<XsrfTokenResponse>(API_PATHS.auth.xsrf)
     xsrfToken = response.token
     return xsrfToken
   }
@@ -130,7 +131,7 @@ export function createAuthStore() {
           return false
         }
 
-        const session = await apiRequest<AuthSessionResponse>('/tokens/refresh', {
+        const session = await apiRequest<AuthSessionResponse>(API_PATHS.auth.refresh, {
           method: 'POST',
           xsrfToken: token,
         })

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ArrowLeft } from 'lucide-svelte'
   import { fly } from 'svelte/transition'
+  import { API_PATHS, getLucideIconUrl } from '../../config/app'
   import { type ClueUsageStatDto, type MyRankedStatsResult } from '../../api/client'
   import type { createAuthStore } from '../../stores/auth.svelte'
   import { iconMap } from '../../stores/game.svelte'
@@ -56,7 +57,7 @@
   })
 
   async function loadClueUsageStats(): Promise<ClueUsageEntry[]> {
-    const apiStats = await auth.request<MyRankedStatsResult>('/ranked/stats/me')
+    const apiStats = await auth.request<MyRankedStatsResult>(API_PATHS.ranked.statsMe)
 
     return apiStats.clueUsageStats
       .map((stat: ClueUsageStatDto) => {
@@ -104,7 +105,7 @@
                   {@const IconComponent = clue.icon}
                   <IconComponent size={20} />
                 {:else if clue.customIcon}
-                  <div class="custom-icon" style="mask-image: url('https://unpkg.com/lucide-static@latest/icons/{clue.customIcon}.svg'); -webkit-mask-image: url('https://unpkg.com/lucide-static@latest/icons/{clue.customIcon}.svg');"></div>
+                  <div class="custom-icon" style={`mask-image: url('${getLucideIconUrl(clue.customIcon)}'); -webkit-mask-image: url('${getLucideIconUrl(clue.customIcon)}');`}></div>
                 {/if}
               </div>
               <div class="clue-name">{clue.label}</div>

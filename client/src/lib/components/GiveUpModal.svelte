@@ -57,23 +57,38 @@
     backdrop-filter: blur(4px);
     z-index: 10001;
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     justify-content: center;
+  }
+
+  @media (min-width: 768px) {
+    .modal-backdrop {
+      align-items: center;
+    }
   }
 
   .modal-content {
     background: var(--panel);
-    width: calc(100% - 32px);
-    max-width: 380px;
-    border-radius: 20px;
+    width: 100%;
+    max-width: 480px;
+    border-radius: 24px 24px 0 0;
     padding: 32px 28px 28px;
     display: flex;
     flex-direction: column;
     align-items: center;
     color: var(--text);
     box-shadow: var(--shadow-lift);
-    animation: zoomIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     position: relative;
+  }
+
+  @media (min-width: 768px) {
+    .modal-content {
+      width: calc(100% - 32px);
+      max-width: 380px;
+      border-radius: 20px;
+      animation: zoomIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
   }
 
   .close-btn {
@@ -151,6 +166,11 @@
     background: color-mix(in oklab, var(--bad) 45%, var(--panel));
     border-color: color-mix(in oklab, var(--bad) 60%, var(--border));
     transform: scale(0.96);
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
   }
 
   @keyframes zoomIn {

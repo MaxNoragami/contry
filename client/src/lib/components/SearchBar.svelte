@@ -2,6 +2,7 @@
   import { Flag, X, SendHorizontal } from "lucide-svelte";
   import { fade } from "svelte/transition";
   import confetti from "canvas-confetti";
+  import { APP_TIMINGS } from "../config/app";
   import SuggestionsDropdown from "./SuggestionsDropdown.svelte";
 
   interface Props {
@@ -120,7 +121,7 @@
         shaking = false;
         submitting = false;
         inputRef?.focus();
-      }, 500);
+      }, APP_TIMINGS.guessShakeMs);
       return;
     }
 
@@ -140,13 +141,13 @@
           onQueryChange("");
           submitting = false;
           inputRef?.focus();
-        }, 500);
+        }, APP_TIMINGS.guessShakeMs);
       } else {
         // Correct — just clear
         onQueryChange("");
         submitting = false;
       }
-    }, 250);
+    }, APP_TIMINGS.submitPreviewMs);
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -211,7 +212,7 @@
       virtualKeyboardHidden = false;
       if (inputRef) {
         inputRef.blur();
-        setTimeout(() => inputRef?.focus(), 10);
+        setTimeout(() => inputRef?.focus(), APP_TIMINGS.keyboardRefocusMs);
       }
     }
   }

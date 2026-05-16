@@ -1,3 +1,5 @@
+import { API_PATHS, APP_LIMITS, APP_URLS } from '../config/app'
+
 export interface ProblemDetailsResponse {
   type?: string
   title?: string
@@ -34,11 +36,11 @@ export function getApiBaseUrl(): string {
     return explicitBaseUrl.replace(/\/$/, '')
   }
 
-  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-    return 'http://localhost:5087'
+  if (import.meta.env.DEV) {
+    return ''
   }
 
-  return 'https://api.contry.app'
+  return APP_URLS.api.production
 }
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
@@ -94,8 +96,8 @@ export interface GetRankedLeaderboardResult {
   pageSize: number
 }
 
-export async function getRankedLeaderboard(page: number = 1, pageSize: number = 7, signal?: AbortSignal): Promise<GetRankedLeaderboardResult> {
-  return apiRequest<GetRankedLeaderboardResult>(`/leaderboards/ranked?page=${page}&pageSize=${pageSize}`, { signal })
+export async function getRankedLeaderboard(page: number = 1, pageSize: number = APP_LIMITS.leaderboardPageSize, signal?: AbortSignal): Promise<GetRankedLeaderboardResult> {
+  return apiRequest<GetRankedLeaderboardResult>(`${API_PATHS.leaderboards.ranked}?page=${page}&pageSize=${pageSize}`, { signal })
 }
 
 export interface CountryDiscoveryStatDto {
@@ -125,9 +127,9 @@ export interface MyRankedStatsResult {
 }
 
 export async function getMyRankedStats(signal?: AbortSignal): Promise<MyRankedStatsResult> {
-  return apiRequest<MyRankedStatsResult>('/ranked/stats/me', { signal })
+  return apiRequest<MyRankedStatsResult>(API_PATHS.ranked.statsMe, { signal })
 }
 
 export async function resetMyRankedStats(xsrfToken: string, signal?: AbortSignal): Promise<void> {
-  return apiRequest<void>('/ranked/stats/me', { method: 'DELETE', xsrfToken, signal })
+  return apiRequest<void>(API_PATHS.ranked.statsMe, { method: 'DELETE', xsrfToken, signal })
 }

@@ -29,6 +29,10 @@ The server requires bootstrap admin credentials through environment configuratio
 
 Development startup additionally seeds fake ranked/demo users and historical ranked data.
 
+CORS origins can include wildcard HTTPS ngrok subdomains via `https://*.ngrok-free.app` in `Cors__AllowedOriginsCsv`.
+
+When the SPA runs under Vite dev, API-style requests should stay same-origin and be proxied by Vite to the local development API (`http://localhost:5087`). This also makes `*.ngrok-free.app` dev tunnels work without trying to call the browser's own `localhost`.
+
 ## Running locally without Docker
 
 ### Server

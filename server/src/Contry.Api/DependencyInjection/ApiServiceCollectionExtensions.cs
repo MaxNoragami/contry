@@ -34,7 +34,7 @@ public static class ApiServiceCollectionExtensions
 
                 if (allowedOrigins.Length > 0)
                 {
-                    policyBuilder.WithOrigins(allowedOrigins);
+                    policyBuilder.SetIsOriginAllowed(origin => IsAllowedOrigin(origin, allowedOrigins));
                 }
 
                 policyBuilder.AllowAnyHeader();
@@ -44,6 +44,68 @@ public static class ApiServiceCollectionExtensions
         });
 
         return services;
+    }
+
+    private static bool IsAllowedOrigin(string origin, IReadOnlyList<string> allowedOrigins)
+    {
+        if (!Uri.TryCreate(origin, UriKind.Absolute, out var originUri))
+        {
+            return false;
+        }
+
+        foreach (var allowedOrigin in allowedOrigins)
+        {
+            if (string.IsNullOrWhiteSpace(allowedOrigin))
+            {
+                continue;
+            }
+
+            if (!allowedOrigin.Contains('*', StringComparison.Ordinal))
+            {
+                if (string.Equals(origin, allowedOrigin, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                continue;
+            }
+
+            if (MatchesWildcardOrigin(originUri, allowedOrigin))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool MatchesWildcardOrigin(Uri originUri, string allowedOrigin)
+    {
+        var normalizedPattern = allowedOrigin.Replace("*.", "wildcard.", StringComparison.Ordinal);
+        if (!Uri.TryCreate(normalizedPattern, UriKind.Absolute, out var patternUri))
+        {
+            return false;
+        }
+
+        if (!string.Equals(originUri.Scheme, patternUri.Scheme, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (originUri.Port != patternUri.Port)
+        {
+            return false;
+        }
+
+        const string wildcardPrefix = "wildcard.";
+        if (!patternUri.Host.StartsWith(wildcardPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var hostSuffix = patternUri.Host[wildcardPrefix.Length..];
+        return originUri.Host.Length > hostSuffix.Length
+            && originUri.Host.EndsWith($".{hostSuffix}", StringComparison.OrdinalIgnoreCase);
     }
 
     private static IServiceCollection AddContrySwagger(this IServiceCollection services)

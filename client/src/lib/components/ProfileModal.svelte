@@ -5,6 +5,7 @@
   import DistributionStatsPage from './stats/DistributionStatsPage.svelte'
   import ClueUsageStatsPage from './stats/ClueUsageStatsPage.svelte'
   import LeaderboardPage from './stats/LeaderboardPage.svelte'
+  import { API_PATHS, APP_TIMINGS } from '../config/app'
   import { getProblemFieldErrors, getProblemMessage, type createAuthStore } from '../stores/auth.svelte'
   import { toastStore } from '../stores/toasts.svelte'
 
@@ -96,7 +97,7 @@
       view = event.state.view as ProfileView
     } else {
       visible = false
-      setTimeout(resetModalState, 300)
+      setTimeout(resetModalState, APP_TIMINGS.modalResetMs)
     }
   }
 
@@ -110,7 +111,7 @@
       window.history.go(-historyDepth)
     }
     visible = false
-    setTimeout(resetModalState, 300)
+    setTimeout(resetModalState, APP_TIMINGS.modalResetMs)
   }
 
   function goBack() {
@@ -201,7 +202,7 @@
         window.history.go(-historyDepth)
       }
       visible = false
-      setTimeout(resetModalState, 300)
+      setTimeout(resetModalState, APP_TIMINGS.modalResetMs)
     } catch (error) {
       toastStore.push(getProblemMessage(error))
     } finally {
@@ -217,7 +218,7 @@
   async function handleClearData() {
     clearingData = true
     try {
-      await auth.request<void>('/ranked/stats/me', { method: 'DELETE' })
+      await auth.request<void>(API_PATHS.ranked.statsMe, { method: 'DELETE' })
       toastStore.push('All ranked data cleared.')
       window.history.back()
     } catch (error) {
@@ -594,6 +595,7 @@
     overflow: hidden;
     color: var(--text);
     box-shadow: var(--shadow-strong);
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     position: relative;
   }
 
@@ -602,6 +604,7 @@
       height: 80vh;
       max-height: 700px;
       border-radius: 20px;
+      animation: zoomIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
   }
 
@@ -929,6 +932,26 @@
 
     .warning-btn.danger:hover:not(:disabled) {
       background: color-mix(in oklab, var(--bad) 42%, var(--panel));
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes zoomIn {
+    from {
+      transform: scale(0.95);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
     }
   }
 </style>
