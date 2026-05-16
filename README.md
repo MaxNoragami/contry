@@ -21,10 +21,17 @@ Monorepo for the `Contry` country-guessing game.
 - Client: `http://localhost:5173`
 - PostgreSQL: `localhost:5432`
 
-Development startup seeds a default admin user:
+The server requires bootstrap admin credentials through environment configuration in every environment. On startup it creates that admin user only if it does not already exist:
 
-- username: `admin`
-- password: `admin12345`
+- `AdminBootstrap__Username`
+- `AdminBootstrap__Email`
+- `AdminBootstrap__Password`
+
+Development startup additionally seeds fake ranked/demo users and historical ranked data.
+
+CORS origins can include wildcard HTTPS ngrok subdomains via `https://*.ngrok-free.app` in `Cors__AllowedOriginsCsv`.
+
+When the SPA runs under Vite dev, API-style requests should stay same-origin and be proxied by Vite to the local development API (`http://localhost:5087`). This also makes `*.ngrok-free.app` dev tunnels work without trying to call the browser's own `localhost`.
 
 ## Running locally without Docker
 
@@ -109,8 +116,8 @@ bun run build
 
 ## Admin endpoints
 
-- `PUT /admin/ranked-challenges/today/target`
-- `DELETE /admin/leaderboards/ranked`
+- `PUT /ranked/challenges/today/target` - admin only
+- `DELETE /leaderboards/ranked` - admin only
 
 Example:
 

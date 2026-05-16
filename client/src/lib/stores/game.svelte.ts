@@ -10,6 +10,7 @@ import {
 import {
   getDB,
 } from './db'
+import { APP_LIMITS, APP_TIMINGS, DEFAULT_CLUE_IDS } from '../config/app'
 import { syncDatasets } from '../datasets/ingest'
 import { evaluateCategorical, evaluateNumeric, evaluateHemisphere, evaluateCoordinates } from '../engine/clues'
 import type { DatasetClueEntry, DatasetManifest } from '../datasets/manifest'
@@ -69,7 +70,7 @@ export const iconMap: Record<string, typeof LucideIcon> = {
   'land-plot': LandPlot,
 }
 
-export const DEFAULT_CLUES = ['hemisphere', 'continent', 'temperature_avg_c', 'population', 'coordinates']
+export const DEFAULT_CLUES = [...DEFAULT_CLUE_IDS]
 
 export interface CountryRecord {
   country_id: string
@@ -228,7 +229,7 @@ export function createArcadeGameState() {
            const metaStore = db.transaction('settings', 'readonly').objectStore('settings')
            const saved = await metaStore.get('selected_clues')
            let newClues = Array.isArray(saved) ? saved : DEFAULT_CLUES
-           if (newClues.length !== 5) newClues = DEFAULT_CLUES
+            if (newClues.length !== APP_LIMITS.activeClueCount) newClues = DEFAULT_CLUES
            userClues = newClues
             updateActiveCluesFromList(newClues, manifest)
             const roundCustomDataSnapshot = await buildRoundCustomDataSnapshot(newClues, db, manifest)
@@ -275,7 +276,7 @@ export function createArcadeGameState() {
         if (!aStarts && bStarts) return 1
         return a.localeCompare(b)
       })
-      .slice(0, 4)
+      .slice(0, APP_LIMITS.suggestionCount)
   })
 
   const bestMatch = $derived.by(() => {
@@ -475,7 +476,7 @@ export function createArcadeGameState() {
     const customClues = await settingsStore.get('custom_clues')
     const savedClues = await settingsStore.get('selected_clues')
     let nextUserClues = Array.isArray(savedClues) ? savedClues : DEFAULT_CLUES
-    if (nextUserClues.length !== 5) nextUserClues = DEFAULT_CLUES
+    if (nextUserClues.length !== APP_LIMITS.activeClueCount) nextUserClues = DEFAULT_CLUES
     userClues = nextUserClues
 
     const syncedManifest = await syncDatasets(nextUserClues)
@@ -537,7 +538,7 @@ export function createArcadeGameState() {
       const metaStore = db.transaction('settings', 'readonly').objectStore('settings')
       const savedClues = await metaStore.get('selected_clues')
       let fetchedUserClues = Array.isArray(savedClues) ? savedClues : DEFAULT_CLUES
-      if (fetchedUserClues.length !== 5) fetchedUserClues = DEFAULT_CLUES
+      if (fetchedUserClues.length !== APP_LIMITS.activeClueCount) fetchedUserClues = DEFAULT_CLUES
       userClues = fetchedUserClues
 
       // Fetch custom clues BEFORE syncDatasets to avoid transaction closing
@@ -568,7 +569,7 @@ export function createArcadeGameState() {
       if (latestGame) {
         if (latestGame.status === 'playing' || latestGame.status === 'won' || latestGame.status === 'lost') {
           // Auto-repair corrupt games
-          if (latestGame.status === 'playing' && latestGame.selected_clues.length !== 5) {
+          if (latestGame.status === 'playing' && latestGame.selected_clues.length !== APP_LIMITS.activeClueCount) {
              await gamesStore.delete(latestGame.game_id)
              shouldCreateNew = true
            } else {
@@ -684,7 +685,7 @@ export function createArcadeGameState() {
     const metaStore = db.transaction('settings', 'readonly').objectStore('settings')
     const savedClues = await metaStore.get('selected_clues')
     let fetchedUserClues = Array.isArray(savedClues) ? savedClues : DEFAULT_CLUES
-    if (fetchedUserClues.length !== 5) fetchedUserClues = DEFAULT_CLUES
+    if (fetchedUserClues.length !== APP_LIMITS.activeClueCount) fetchedUserClues = DEFAULT_CLUES
     userClues = fetchedUserClues
 
     if (countryPool.length > 0) {
@@ -769,7 +770,7 @@ export function createArcadeGameState() {
       errorCountry = match.name
       setTimeout(() => {
         if (errorCountry === match.name) errorCountry = null
-      }, 500)
+      }, APP_TIMINGS.guessShakeMs)
     }
 
     // Save guess to IDB and broadcast

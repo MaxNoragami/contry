@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ArrowLeft, ChevronLeft, ChevronRight, Trophy } from 'lucide-svelte'
   import { fly } from 'svelte/transition'
+  import { APP_LIMITS } from '../../config/app'
   import { getRankedLeaderboard, type RankedLeaderboardEntry, type GetRankedLeaderboardResult } from '../../api/client'
 
   interface Props {
@@ -14,7 +15,7 @@
   let loading = $state(true)
   let error = $state(false)
   let page = $state(1)
-  const pageSize = 25
+  const pageSize = APP_LIMITS.leaderboardPageSize
 
   $effect(() => {
     let cancelled = false

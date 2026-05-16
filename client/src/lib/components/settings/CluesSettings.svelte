@@ -8,8 +8,8 @@
     Pencil,
   } from "lucide-svelte";
   import { fly } from "svelte/transition";
+  import { APP_LIMITS, DEFAULT_CLUE_IDS, getLucideIconUrl } from "../../config/app";
   import { getDB } from "../../stores/db";
-  import { DEFAULT_CLUES } from "../../stores/game.svelte";
 
   import type { ViewType, DraftClueData, NavDirection } from "./types";
 
@@ -61,7 +61,7 @@
   });
 
   function resetToDefault() {
-    const activeIds = DEFAULT_CLUES;
+    const activeIds = [...DEFAULT_CLUE_IDS];
     const selectedSet = new Set(activeIds);
     const unselectedIds = game.availableClues
       .filter((c: any) => !selectedSet.has(c.id))
@@ -74,13 +74,13 @@
   }
 
   async function saveClues() {
-    if (selectedDraftCount !== 5) return;
+    if (selectedDraftCount !== APP_LIMITS.activeClueCount) return;
     if (!isModified) return;
     const newSelected = draftList.filter((c) => c.selected).map((c) => c.id);
     await game.saveClues(newSelected);
   }
 
-  const isSaveDisabled = $derived(!isModified || selectedDraftCount !== 5);
+  const isSaveDisabled = $derived(!isModified || selectedDraftCount !== APP_LIMITS.activeClueCount);
 
   let isDragging = $state(false);
   let draggedIndex = $state<number | null>(null);
@@ -235,8 +235,8 @@
       <ArrowLeft />
     </button>
     <h2 class="centered-title">
-      Clues <span class="counter" class:error={selectedDraftCount !== 5}
-        >({selectedDraftCount}/5)</span
+      Clues <span class="counter" class:error={selectedDraftCount !== APP_LIMITS.activeClueCount}
+        >({selectedDraftCount}/{APP_LIMITS.activeClueCount})</span
       >
     </h2>
     <div class="header-actions">
@@ -250,7 +250,7 @@
       <button
         class="icon-btn save-btn"
         class:is-modified={!isSaveDisabled}
-        class:is-error={selectedDraftCount !== 5}
+        class:is-error={selectedDraftCount !== APP_LIMITS.activeClueCount}
         aria-label="Save"
         onclick={saveClues}
         disabled={isSaveDisabled}
@@ -301,7 +301,7 @@
               {@const IconComponent = clueDef.icon}
               <IconComponent size={20} />
             {:else if clueDef?.customIcon}
-              <div class="custom-icon" style="mask-image: url('https://unpkg.com/lucide-static@latest/icons/{clueDef.customIcon}.svg'); -webkit-mask-image: url('https://unpkg.com/lucide-static@latest/icons/{clueDef.customIcon}.svg');"></div>
+              <div class="custom-icon" style={`mask-image: url('${getLucideIconUrl(clueDef.customIcon)}'); -webkit-mask-image: url('${getLucideIconUrl(clueDef.customIcon)}');`}></div>
             {/if}
           </div>
           <span

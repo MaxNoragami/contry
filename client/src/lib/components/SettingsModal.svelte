@@ -5,8 +5,9 @@
   import AddClueSettings from "./settings/AddClueSettings.svelte";
   import EditClueSettings from "./settings/EditClueSettings.svelte";
   import IconPickerSettings from "./settings/IconPickerSettings.svelte";
-  import DatasetEditorSettings from "./settings/DatasetEditorSettings.svelte";
-  import { clearAllCachedData } from "../stores/db";
+import DatasetEditorSettings from "./settings/DatasetEditorSettings.svelte";
+import { APP_TIMINGS } from "../config/app";
+import { clearAllCachedData } from "../stores/db";
   import {
     cycleThemeMode,
     getThemeModeLabel,
@@ -138,7 +139,7 @@
         visible = false;
         setTimeout(() => {
           resetModalState();
-        }, 300);
+        }, APP_TIMINGS.modalResetMs);
       }
     }
   }
@@ -200,7 +201,7 @@
     visible = false;
     setTimeout(() => {
       resetModalState();
-    }, 300);
+    }, APP_TIMINGS.modalResetMs);
   }
 
   function handleBackdropClick(e: MouseEvent) {

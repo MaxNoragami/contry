@@ -3,7 +3,8 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using Contry.Api.Features.Auth;
-using Contry.Api.Features.Ranked;
+using Contry.Api.Features.Ranked.Guesses;
+using Contry.Api.Features.Ranked.Sessions;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Contry.Api.IntegrationTests;
@@ -16,7 +17,7 @@ public sealed class RankedFlowTests(TestWebApplicationFactory factory) : IClassF
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
 
         var (_, cookies) = await RegisterAndGetCookiesAsync(client, "ranked-not-started", "ranked-not-started@example.com");
-        var response = await client.SendAsync(CreateRequest(HttpMethod.Get, "/ranked-sessions/current", cookies));
+        var response = await client.SendAsync(CreateRequest(HttpMethod.Get, "/ranked/sessions/current", cookies));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var session = (await response.Content.ReadFromJsonAsync<RankedSessionResponse>())!;
@@ -30,7 +31,7 @@ public sealed class RankedFlowTests(TestWebApplicationFactory factory) : IClassF
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
 
         var (_, cookies) = await RegisterAndGetCookiesAsync(client, "ranked-xsrf", "ranked-xsrf@example.com");
-        var request = CreateRequest(HttpMethod.Post, "/ranked-guesses", cookies);
+        var request = CreateRequest(HttpMethod.Post, "/ranked/guesses", cookies);
         request.Content = JsonContent.Create(new CreateRankedGuessRequest("MD"));
 
         var response = await client.SendAsync(request);
@@ -48,7 +49,7 @@ public sealed class RankedFlowTests(TestWebApplicationFactory factory) : IClassF
         var (_, cookies, xsrf) = await RegisterAndGetXsrfAsync(client, "ranked-play", "ranked-play@example.com");
         var firstCountryId = await GetNonWinningCountryIdAsync();
 
-        var firstRequest = CreateRequest(HttpMethod.Post, "/ranked-guesses", cookies, xsrf);
+        var firstRequest = CreateRequest(HttpMethod.Post, "/ranked/guesses", cookies, xsrf);
         firstRequest.Content = JsonContent.Create(new CreateRankedGuessRequest(firstCountryId));
         var firstResponse = await client.SendAsync(firstRequest);
 
@@ -66,7 +67,7 @@ public sealed class RankedFlowTests(TestWebApplicationFactory factory) : IClassF
         Assert.DoesNotContain("\"clues\":", firstResponseText, StringComparison.Ordinal);
         Assert.DoesNotContain("\"guesses\":", firstResponseText, StringComparison.Ordinal);
 
-        var duplicateRequest = CreateRequest(HttpMethod.Post, "/ranked-guesses", cookies, xsrf);
+        var duplicateRequest = CreateRequest(HttpMethod.Post, "/ranked/guesses", cookies, xsrf);
         duplicateRequest.Content = JsonContent.Create(new CreateRankedGuessRequest(firstCountryId));
         var duplicateResponse = await client.SendAsync(duplicateRequest);
 
@@ -74,7 +75,7 @@ public sealed class RankedFlowTests(TestWebApplicationFactory factory) : IClassF
         var duplicateProblem = (await duplicateResponse.Content.ReadFromJsonAsync<ProblemResponse>())!;
         Assert.Equal("/problems/ranked/duplicate-guess", duplicateProblem.Type);
 
-        var sessionResponse = await client.SendAsync(CreateRequest(HttpMethod.Get, "/ranked-sessions/current", cookies));
+        var sessionResponse = await client.SendAsync(CreateRequest(HttpMethod.Get, "/ranked/sessions/current", cookies));
         Assert.Equal(HttpStatusCode.OK, sessionResponse.StatusCode);
         var session = (await sessionResponse.Content.ReadFromJsonAsync<RankedSessionResponse>())!;
         Assert.Equal("playing", session.Status);
@@ -89,7 +90,7 @@ public sealed class RankedFlowTests(TestWebApplicationFactory factory) : IClassF
         var (_, cookies, xsrf) = await RegisterAndGetXsrfAsync(client, "ranked-win", "ranked-win@example.com");
         var targetCountryId = await GetCurrentTargetCountryIdAsync();
 
-        var guessRequest = CreateRequest(HttpMethod.Post, "/ranked-guesses", cookies, xsrf);
+        var guessRequest = CreateRequest(HttpMethod.Post, "/ranked/guesses", cookies, xsrf);
         guessRequest.Content = JsonContent.Create(new CreateRankedGuessRequest(targetCountryId));
         var guessResponse = await client.SendAsync(guessRequest);
 
@@ -99,13 +100,48 @@ public sealed class RankedFlowTests(TestWebApplicationFactory factory) : IClassF
         Assert.NotNull(guess.CompletedAtUtc);
         Assert.Equal(targetCountryId, guess.Guess.GuessCountryId);
 
-        var anotherGuess = CreateRequest(HttpMethod.Post, "/ranked-guesses", cookies, xsrf);
+        var anotherGuess = CreateRequest(HttpMethod.Post, "/ranked/guesses", cookies, xsrf);
         anotherGuess.Content = JsonContent.Create(new CreateRankedGuessRequest(await GetNonWinningCountryIdAsync()));
         var completedResponse = await client.SendAsync(anotherGuess);
 
         Assert.Equal(HttpStatusCode.Conflict, completedResponse.StatusCode);
         var problem = (await completedResponse.Content.ReadFromJsonAsync<ProblemResponse>())!;
         Assert.Equal("/problems/ranked/session-completed", problem.Type);
+    }
+
+    [Fact]
+    public async Task RankedGiveUp_CompletesSessionAsLost_AndRevealsTarget()
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+
+        var (_, cookies, xsrf) = await RegisterAndGetXsrfAsync(client, "ranked-giveup", "ranked-giveup@example.com");
+        var wrongCountryId = await GetNonWinningCountryIdAsync();
+
+        var guessRequest = CreateRequest(HttpMethod.Post, "/ranked/guesses", cookies, xsrf);
+        guessRequest.Content = JsonContent.Create(new CreateRankedGuessRequest(wrongCountryId));
+        var guessResponse = await client.SendAsync(guessRequest);
+        Assert.Equal(HttpStatusCode.OK, guessResponse.StatusCode);
+
+        var giveUpRequest = CreateRequest(HttpMethod.Post, "/ranked/sessions/current/give-up", cookies, xsrf);
+        var giveUpResponse = await client.SendAsync(giveUpRequest);
+
+        Assert.Equal(HttpStatusCode.OK, giveUpResponse.StatusCode);
+        var session = (await giveUpResponse.Content.ReadFromJsonAsync<RankedSessionResponse>())!;
+        Assert.Equal("lost", session.Status);
+        Assert.Equal(1, session.GuessCount);
+        Assert.Equal(2, session.Guesses.Count);
+        Assert.NotNull(session.CompletedAtUtc);
+
+        var revealRow = session.Guesses[^1];
+        Assert.Equal(await GetCurrentTargetCountryIdAsync(), revealRow.GuessCountryId);
+        Assert.All(revealRow.Results, result => Assert.Equal("blue", result.Tone));
+
+        var persistedSessionResponse = await client.SendAsync(CreateRequest(HttpMethod.Get, "/ranked/sessions/current", cookies));
+        Assert.Equal(HttpStatusCode.OK, persistedSessionResponse.StatusCode);
+        var persistedSession = (await persistedSessionResponse.Content.ReadFromJsonAsync<RankedSessionResponse>())!;
+        Assert.Equal("lost", persistedSession.Status);
+        Assert.Equal(2, persistedSession.Guesses.Count);
+        Assert.Equal(revealRow.GuessCountryId, persistedSession.Guesses[^1].GuessCountryId);
     }
 
     private static async Task<(AuthSessionResponse Session, Dictionary<string, string> Cookies)> RegisterAndGetCookiesAsync(HttpClient client, string username, string email)

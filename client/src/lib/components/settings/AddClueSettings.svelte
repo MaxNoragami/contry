@@ -11,6 +11,7 @@
   } from "lucide-svelte";
   import { fly } from "svelte/transition";
   import Papa from "papaparse";
+  import { APP_LIMITS } from "../../config/app";
   import type { ViewType, DraftClueData, NavDirection } from "./types";
   import { getDB } from "../../stores/db";
   import type { DatasetClueEntry } from "../../datasets/manifest";
@@ -235,7 +236,7 @@
     );
 
     if (missingCodes.length > 0) {
-      uploadError = `The document is missing rows for ${missingCodes.length} countries (e.g., ${missingCodes.slice(0, 3).join(", ")}). Please use the template.`;
+      uploadError = `The document is missing rows for ${missingCodes.length} countries (e.g., ${missingCodes.slice(0, APP_LIMITS.uploadMissingExampleCount).join(", ")}). Please use the template.`;
       return;
     }
 

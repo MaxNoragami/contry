@@ -25,7 +25,7 @@ services:
       - ./.env.dev
     environment:
       ConnectionStrings__Database: Host=db;Port=5432;Database=contry_dev;Username=contry;Password=contry_dev123
-      Cors__AllowedOriginsCsv: http://localhost:5173
+      Cors__AllowedOriginsCsv: http://localhost:5173,https://*.ngrok-free.app
       ASPNETCORE_URLS: http://+:8080
     depends_on:
       db:

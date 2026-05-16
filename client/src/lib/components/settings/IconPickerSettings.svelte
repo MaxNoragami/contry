@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ArrowLeft, CircleAlert } from "lucide-svelte";
   import { fly } from "svelte/transition";
+  import { APP_LIMITS, getLucideIconUrl, getLucideTagsUrl } from "../../config/app";
   import type { DraftClueData, NavDirection } from "./types";
 
   interface Props {
@@ -17,7 +18,7 @@
   let loading = $state(true);
 
   $effect(() => {
-    fetch("https://unpkg.com/lucide-static@latest/tags.json")
+    fetch(getLucideTagsUrl())
       .then((r) => {
         if (!r.ok) throw new Error("Failed to fetch");
         return r.json();
@@ -38,12 +39,12 @@
     const q = searchQuery.toLowerCase().trim();
     const all = Object.entries(tagsData);
     if (!q) {
-      return all.slice(0, 50).map((e) => e[0]);
+      return all.slice(0, APP_LIMITS.iconPickerResultCount).map((e) => e[0]);
     }
     const matches = all.filter(([name, tags]) => {
       return name.includes(q) || tags.some((t) => t.includes(q));
     });
-    return matches.slice(0, 50).map((e) => e[0]);
+    return matches.slice(0, APP_LIMITS.iconPickerResultCount).map((e) => e[0]);
   });
 
   function selectIcon(name: string) {
@@ -88,7 +89,7 @@
         <button class="icon-row" onclick={() => selectIcon(iconName)}>
           <div
             class="custom-icon"
-            style="mask-image: url('https://unpkg.com/lucide-static@latest/icons/{iconName}.svg'); -webkit-mask-image: url('https://unpkg.com/lucide-static@latest/icons/{iconName}.svg');"
+            style={`mask-image: url('${getLucideIconUrl(iconName)}'); -webkit-mask-image: url('${getLucideIconUrl(iconName)}');`}
           ></div>
           <span class="icon-name">{iconName}</span>
         </button>

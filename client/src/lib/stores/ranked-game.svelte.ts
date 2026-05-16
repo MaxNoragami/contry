@@ -1,4 +1,5 @@
 import { Globe, Compass, Thermometer, Users, Navigation, type Icon as LucideIcon } from 'lucide-svelte'
+import { API_PATHS, APP_LIMITS, APP_TIMINGS, DEFAULT_CLUE_IDS } from '../config/app'
 import { getApiBaseUrl } from '../api/client'
 import { syncDatasets } from '../datasets/ingest'
 import type { DatasetManifest } from '../datasets/manifest'
@@ -70,14 +71,13 @@ const iconMap: Record<string, typeof LucideIcon> = {
   navigation: Navigation,
 }
 
-const DEFAULT_RANKED_CLUES = ['hemisphere', 'continent', 'temperature_avg_c', 'population', 'coordinates']
-
 export function createRankedGameState(auth: ReturnType<typeof createAuthStore>) {
   let query = $state('')
   let previewCountry = $state<string | null>(null)
   let rows = $state<GuessRow[]>([])
   let errorCountry = $state<string | null>(null)
   let correctCountry = $state<string | null>(null)
+  let gaveUpCountry = $state<string | null>(null)
   let hasWon = $state(false)
   let loading = $state(false)
   let countryPool = $state<CountryRecord[]>([])
@@ -110,10 +110,15 @@ export function createRankedGameState(auth: ReturnType<typeof createAuthStore>) 
         if (!aStarts && bStarts) return 1
         return a.localeCompare(b)
       })
-      .slice(0, 4)
+      .slice(0, APP_LIMITS.suggestionCount)
   })
 
   const bestMatch = $derived.by(() => {
+    if (gaveUpCountry) {
+      const match = countryPool.find((country) => country.name === gaveUpCountry)
+      return match ? { name: match.name, lat: match.lat, lon: match.lon } : null
+    }
+
     if (previewCountry) {
       const queryName = previewCountry.toLowerCase()
       if (guessedNames.has(queryName)) return null
@@ -144,12 +149,12 @@ export function createRankedGameState(auth: ReturnType<typeof createAuthStore>) 
         await hydrateCountryPool()
       }
 
-      const challenge = await auth.request<RankedChallengeResponse>('/ranked-challenges/current')
+      const challenge = await auth.request<RankedChallengeResponse>(API_PATHS.ranked.challengeCurrent)
       challengeDateUtc = challenge.challengeDateUtc
       activeClues = challenge.clues.map(toClueDef)
       availableClues = [...activeClues]
 
-      const session = await auth.request<RankedSessionResponse>('/ranked-sessions/current')
+      const session = await auth.request<RankedSessionResponse>(API_PATHS.ranked.sessionCurrent)
       applySession(session)
       initialized = true
     } finally {
@@ -158,8 +163,8 @@ export function createRankedGameState(auth: ReturnType<typeof createAuthStore>) 
   }
 
   async function hydrateCountryPool() {
-    manifest = await syncDatasets(DEFAULT_RANKED_CLUES)
-    const baseResponse = await fetch(`${getApiBaseUrl()}/datasets/base/countries.csv`)
+    manifest = await syncDatasets([...DEFAULT_CLUE_IDS])
+    const baseResponse = await fetch(`${getApiBaseUrl()}${API_PATHS.datasets.baseCountries}`)
     const baseCsv = await baseResponse.text()
     const lines = baseCsv.trim().split(/\r?\n/).slice(1)
 
@@ -178,6 +183,9 @@ export function createRankedGameState(auth: ReturnType<typeof createAuthStore>) 
     sessionStatus = session.status
     hasWon = session.status === 'won'
     rows = session.guesses.map(toGuessRow)
+    gaveUpCountry = session.status === 'lost' && session.guesses.length > 0
+      ? session.guesses[session.guesses.length - 1].guessCountryName
+      : null
     correctCountry = session.status === 'won' && session.guesses.length > 0
       ? session.guesses[session.guesses.length - 1].guessCountryName
       : null
@@ -189,7 +197,7 @@ export function createRankedGameState(auth: ReturnType<typeof createAuthStore>) 
   }
 
   async function submitGuess(countryName: string): Promise<{ valid: boolean; correct?: boolean }> {
-    if (!auth.isAuthenticated || hasWon) {
+    if (!auth.isAuthenticated || hasWon || sessionStatus === 'lost') {
       return { valid: false }
     }
 
@@ -203,7 +211,7 @@ export function createRankedGameState(auth: ReturnType<typeof createAuthStore>) 
     pendingGuessCountryId = match.country_id
 
     try {
-      const response = await auth.request<CreateRankedGuessResponse>('/ranked-guesses', {
+      const response = await auth.request<CreateRankedGuessResponse>(API_PATHS.ranked.guesses, {
         method: 'POST',
         body: { countryId: match.country_id },
       })
@@ -223,7 +231,7 @@ export function createRankedGameState(auth: ReturnType<typeof createAuthStore>) 
           if (errorCountry === response.guess.guessCountryName) {
             errorCountry = null
           }
-        }, 500)
+        }, APP_TIMINGS.guessShakeMs)
       }
 
       return { valid: true, correct: hasWon }
@@ -243,6 +251,29 @@ export function createRankedGameState(auth: ReturnType<typeof createAuthStore>) 
     await initGame()
   }
 
+  async function giveUp() {
+    if (!auth.isAuthenticated || hasWon || sessionStatus === 'lost') {
+      return
+    }
+
+    try {
+      const session = await auth.request<RankedSessionResponse>(API_PATHS.ranked.sessionGiveUp, {
+        method: 'POST',
+      })
+
+      applySession(session)
+      query = ''
+      previewCountry = null
+      pendingGuessCountryId = null
+    } catch (error) {
+      if (!auth.isAuthenticated) {
+        toastStore.push('Your session expired. Please log in again.')
+      } else {
+        toastStore.push('Failed to give up in ranked. Please try again.')
+      }
+    }
+  }
+
   function clearSession() {
     resetState()
     initialized = false
@@ -254,6 +285,7 @@ export function createRankedGameState(auth: ReturnType<typeof createAuthStore>) 
     rows = []
     errorCountry = null
     correctCountry = null
+    gaveUpCountry = null
     hasWon = false
     sessionStatus = 'not_started'
     activeClues = []
@@ -369,14 +401,14 @@ export function createRankedGameState(auth: ReturnType<typeof createAuthStore>) 
     get errorCountry() { return errorCountry },
     get correctCountry() { return correctCountry },
     get hasWon() { return hasWon },
-    get hasGivenUp() { return false },
-    get gameOver() { return hasWon },
-    get targetCountryName() { return null },
-    get gaveUpCountry() { return null },
+    get hasGivenUp() { return sessionStatus === 'lost' },
+    get gameOver() { return hasWon || sessionStatus === 'lost' },
+    get targetCountryName() { return correctCountry ?? gaveUpCountry },
+    get gaveUpCountry() { return gaveUpCountry },
     get isTyping() { return isTyping },
     get suggestions() { return suggestions },
     get bestMatch() { return bestMatch },
-    get userClues() { return DEFAULT_RANKED_CLUES },
+    get userClues() { return [...DEFAULT_CLUE_IDS] },
     get activeClues() { return activeClues },
     get availableClues() { return availableClues },
     get manifest() { return manifest },
@@ -388,5 +420,6 @@ export function createRankedGameState(auth: ReturnType<typeof createAuthStore>) 
     clearSession,
     isValid,
     submitGuess,
+    giveUp,
   }
 }

@@ -1,3 +1,5 @@
+import { APP_LIMITS, APP_TIMINGS } from '../config/app'
+
 export type ToastTone = 'error'
 
 export type ToastItem = {
@@ -9,14 +11,14 @@ export type ToastItem = {
 export function createToastStore() {
   let items = $state<ToastItem[]>([])
 
-  function push(message: string, tone: ToastTone = 'error', durationMs = 3000) {
+  function push(message: string, tone: ToastTone = 'error', durationMs = APP_TIMINGS.toastDurationMs) {
     const toast: ToastItem = {
       id: crypto.randomUUID(),
       message,
       tone,
     }
 
-    items = [toast, ...items].slice(0, 3)
+    items = [toast, ...items].slice(0, APP_LIMITS.toastVisibleCount)
 
     const timeout = setTimeout(() => {
       remove(toast.id)

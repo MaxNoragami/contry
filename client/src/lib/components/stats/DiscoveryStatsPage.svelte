@@ -3,6 +3,7 @@
   import { fly } from 'svelte/transition'
   import DiscoveryStatsMap from './DiscoveryStatsMap.svelte'
   import DiscoveryRing from './DiscoveryRing.svelte'
+  import { API_PATHS } from '../../config/app'
   import { type CountryDiscoveryStatDto, type MyRankedStatsResult } from '../../api/client'
   import type { createAuthStore } from '../../stores/auth.svelte'
   import type { DiscoveryStatsPayload, DiscoveryContinentKey, DiscoveryCountrySummary, DiscoveryContinentSummary } from '../../stores/game.svelte'
@@ -48,7 +49,7 @@
 
   async function loadDiscoveryStats(): Promise<DiscoveryStatsPayload> {
     const [apiStats, localData] = await Promise.all([
-      auth.request<MyRankedStatsResult>('/ranked-stats/me'),
+      auth.request<MyRankedStatsResult>(API_PATHS.ranked.statsMe),
       loadLocalCountryData(),
     ])
 

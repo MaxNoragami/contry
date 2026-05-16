@@ -32,7 +32,7 @@
 
   .row {
     display: grid;
-    grid-template-columns: 36px 1fr;
+    grid-template-columns: 44px 1fr;
     align-items: center;
     gap: 10px;
   }

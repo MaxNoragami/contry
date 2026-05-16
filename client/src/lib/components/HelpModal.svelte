@@ -1,6 +1,7 @@
 <script lang="ts">
   import { X } from 'lucide-svelte'
   import { fade } from 'svelte/transition'
+  import { getLucideIconUrl } from '../config/app'
 
   interface Props {
     visible: boolean
@@ -62,7 +63,7 @@
                     {@const IconComponent = clue.icon}
                     <IconComponent size={20} />
                   {:else if clue.customIcon}
-                    <div class="custom-icon" style="mask-image: url('https://unpkg.com/lucide-static@latest/icons/{clue.customIcon}.svg'); -webkit-mask-image: url('https://unpkg.com/lucide-static@latest/icons/{clue.customIcon}.svg');"></div>
+                    <div class="custom-icon" style={`mask-image: url('${getLucideIconUrl(clue.customIcon)}'); -webkit-mask-image: url('${getLucideIconUrl(clue.customIcon)}');`}></div>
                   {/if}
                 </div>
                 <div class="clue-copy">
@@ -85,7 +86,7 @@
                       {@const IconComponent = clue.icon}
                       <IconComponent size={20} />
                     {:else if clue.customIcon}
-                      <div class="custom-icon" style="mask-image: url('https://unpkg.com/lucide-static@latest/icons/{clue.customIcon}.svg'); -webkit-mask-image: url('https://unpkg.com/lucide-static@latest/icons/{clue.customIcon}.svg');"></div>
+                      <div class="custom-icon" style={`mask-image: url('${getLucideIconUrl(clue.customIcon)}'); -webkit-mask-image: url('${getLucideIconUrl(clue.customIcon)}');`}></div>
                     {/if}
                   </div>
                   <div class="clue-copy">
@@ -165,6 +166,7 @@
     overflow: hidden;
     color: var(--text);
     box-shadow: var(--shadow-strong);
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     position: relative;
   }
 
@@ -173,6 +175,7 @@
       height: 80vh;
       max-height: 700px;
       border-radius: 20px;
+      animation: zoomIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
   }
 
@@ -384,6 +387,26 @@
       grid-template-columns: 40px 1fr;
       column-gap: 14px;
       align-items: start;
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes zoomIn {
+    from {
+      transform: scale(0.95);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
     }
   }
 </style>

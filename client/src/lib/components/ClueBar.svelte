@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { getLucideIconUrl } from '../config/app'
   import type { ClueDef } from '../stores/game.svelte'
 
   interface Props {
@@ -18,7 +19,7 @@
             {@const IconComponent = clue.icon}
             <IconComponent size={18} />
           {:else if clue.customIcon}
-            <div class="custom-icon" style="mask-image: url('https://unpkg.com/lucide-static@latest/icons/{clue.customIcon}.svg'); -webkit-mask-image: url('https://unpkg.com/lucide-static@latest/icons/{clue.customIcon}.svg');"></div>
+            <div class="custom-icon" style={`mask-image: url('${getLucideIconUrl(clue.customIcon)}'); -webkit-mask-image: url('${getLucideIconUrl(clue.customIcon)}');`}></div>
           {/if}
         </span>
         <span class="clue-label">{clue.label}</span>

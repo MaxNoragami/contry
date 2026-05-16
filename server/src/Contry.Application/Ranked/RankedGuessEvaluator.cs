@@ -21,6 +21,27 @@ public sealed class RankedGuessEvaluator
         return results;
     }
 
+    public IReadOnlyList<RankedClueResult> RevealTarget(
+        RankedCountryRecord target,
+        IReadOnlyList<RankedClueDefinition> clues,
+        DateOnly challengeDateUtc)
+    {
+        var results = new List<RankedClueResult>(clues.Count);
+
+        foreach (var clue in clues)
+        {
+            var result = EvaluateClue(clue, target, target, challengeDateUtc);
+            results.Add(result with
+            {
+                Tone = RankedChipTone.Blue,
+                Trend = null,
+                Value = clue.Id == "coordinates" ? "\u2713" : result.Value,
+            });
+        }
+
+        return results;
+    }
+
     private static RankedClueResult EvaluateClue(
         RankedClueDefinition clue,
         RankedCountryRecord guess,

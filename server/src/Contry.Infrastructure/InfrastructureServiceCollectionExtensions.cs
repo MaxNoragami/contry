@@ -11,6 +11,13 @@ public static class InfrastructureServiceCollectionExtensions
 {
     public static IServiceCollection AddContryInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        services.AddOptions<AdminBootstrapOptions>()
+            .Bind(configuration.GetSection(AdminBootstrapOptions.SectionName))
+            .Validate(options => !string.IsNullOrWhiteSpace(options.Username), "Admin bootstrap username is required.")
+            .Validate(options => !string.IsNullOrWhiteSpace(options.Email), "Admin bootstrap email is required.")
+            .Validate(options => !string.IsNullOrWhiteSpace(options.Password), "Admin bootstrap password is required.")
+            .ValidateOnStart();
+
         services.AddOptions<JwtOptions>()
             .Bind(configuration.GetSection(JwtOptions.SectionName))
             .Validate(options => !string.IsNullOrWhiteSpace(options.Secret), "Jwt secret is required.")
