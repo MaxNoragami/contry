@@ -41,6 +41,7 @@
   })
 
   function handleInput(index: number, e: Event) {
+    if (newClueDraft.readOnly) return
     const val = (e.target as HTMLInputElement).value
     const trimmed = val.trim()
 
@@ -92,6 +93,7 @@
                 <input 
                   type="text" 
                   value={row.value ?? ''} 
+                  disabled={newClueDraft.readOnly}
                   oninput={(e) => handleInput(row.index, e)} 
                 />
               </td>

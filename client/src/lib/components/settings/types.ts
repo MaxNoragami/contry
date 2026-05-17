@@ -1,9 +1,9 @@
-export type ViewType = 'main' | 'clues' | 'add-clue' | 'edit-clue' | 'icon-picker' | 'dataset-editor' | 'clear-cache-warning';
+export type ViewType = 'main' | 'clues' | 'add-clue' | 'edit-clue' | 'view-clue' | 'explore-clues' | 'icon-picker' | 'dataset-editor' | 'clear-cache-warning';
 
 export type NavDirection = 'forward' | 'back';
 
 export type DraftClueData = {
-  mode: 'create' | 'edit';
+  mode: 'create' | 'edit' | 'view';
   originalId: string | null;
   baselineSnapshot?: string | null;
   id: string;
@@ -15,4 +15,9 @@ export type DraftClueData = {
   icon: string;
   categories: string[];
   data: { country_id: string; value: any }[];
+  remoteId?: string | null;
+  ownerId?: string | null;
+  ownerUsername?: string | null;
+  visibility?: 'public' | 'private' | null;
+  readOnly?: boolean;
 };
