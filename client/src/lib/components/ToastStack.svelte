@@ -49,4 +49,10 @@
     overflow-wrap: break-word;
     text-align: center;
   }
+
+  .toast.success {
+    border-color: var(--toast-success-border);
+    background: var(--toast-success-bg);
+    color: var(--toast-success-text);
+  }
 </style>

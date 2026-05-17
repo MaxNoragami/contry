@@ -25,6 +25,9 @@ export const API_PATHS = {
   leaderboards: {
     ranked: '/leaderboards/ranked',
   },
+  cluePacks: {
+    root: '/clue-packs',
+  },
   datasets: {
     manifest: '/datasets/manifest.json',
     baseCountries: '/datasets/base/countries.csv',
@@ -33,12 +36,14 @@ export const API_PATHS = {
 
 export const STORAGE_KEYS = {
   gameMode: 'contry.game_mode',
+  clueWorkspace: 'contry.clue_workspace',
 } as const
 
 export const APP_LIMITS = {
   activeClueCount: 5,
   suggestionCount: 4,
   leaderboardPageSize: 7,
+  cluePackPageSize: 8,
   iconPickerResultCount: 50,
   uploadMissingExampleCount: 3,
   toastVisibleCount: 3,

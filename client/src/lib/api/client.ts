@@ -133,3 +133,87 @@ export async function getMyRankedStats(signal?: AbortSignal): Promise<MyRankedSt
 export async function resetMyRankedStats(xsrfToken: string, signal?: AbortSignal): Promise<void> {
   return apiRequest<void>(API_PATHS.ranked.statsMe, { method: 'DELETE', xsrfToken, signal })
 }
+
+export type CluePackVisibility = 'public' | 'private'
+
+export interface CluePackRowDto {
+  countryId: string
+  value: string | number | null
+}
+
+export interface CluePackListItemDto {
+  id: string
+  datasetId: string
+  label: string
+  description: string
+  type: 'numeric' | 'categorical'
+  comparator: 'higher_lower' | 'exact'
+  unitSymbol: string | null
+  icon: string
+  ownerId: string
+  ownerUsername: string
+  visibility: CluePackVisibility
+  updatedAtUtc: string
+  canEdit: boolean
+}
+
+export interface CluePackDetailDto extends CluePackListItemDto {
+  categories: string[]
+  rows: CluePackRowDto[]
+  createdAtUtc: string
+}
+
+export interface ListCluePacksResult {
+  items: CluePackListItemDto[]
+  totalCount: number
+  page: number
+  pageSize: number
+}
+
+export interface UpsertCluePackBody {
+  datasetId: string
+  label: string
+  description: string
+  type: 'numeric' | 'categorical'
+  comparator: 'higher_lower' | 'exact'
+  unitSymbol: string | null
+  icon: string
+  categories: string[]
+  rows: CluePackRowDto[]
+  visibility: CluePackVisibility
+}
+
+export interface ListCluePacksOptions {
+  page?: number
+  pageSize?: number
+  q?: string
+  ownerId?: string
+  visibility?: CluePackVisibility
+  signal?: AbortSignal
+}
+
+export async function listCluePacks(options: ListCluePacksOptions = {}): Promise<ListCluePacksResult> {
+  const params = new URLSearchParams()
+  params.set('page', String(options.page ?? 1))
+  params.set('pageSize', String(options.pageSize ?? APP_LIMITS.cluePackPageSize))
+  if (options.q?.trim()) params.set('q', options.q.trim())
+  if (options.ownerId) params.set('ownerId', options.ownerId)
+  if (options.visibility) params.set('visibility', options.visibility)
+  return apiRequest<ListCluePacksResult>(`${API_PATHS.cluePacks.root}?${params.toString()}`, { signal: options.signal })
+}
+
+export async function getCluePack(id: string, signal?: AbortSignal): Promise<CluePackDetailDto> {
+  return apiRequest<CluePackDetailDto>(`${API_PATHS.cluePacks.root}/${id}`, { signal })
+}
+
+export async function createCluePack(body: UpsertCluePackBody, xsrfToken: string, signal?: AbortSignal): Promise<CluePackDetailDto> {
+  return apiRequest<CluePackDetailDto>(API_PATHS.cluePacks.root, { method: 'POST', body, xsrfToken, signal })
+}
+
+export async function updateCluePack(id: string, body: UpsertCluePackBody, xsrfToken: string, signal?: AbortSignal): Promise<CluePackDetailDto> {
+  return apiRequest<CluePackDetailDto>(`${API_PATHS.cluePacks.root}/${id}`, { method: 'PUT', body, xsrfToken, signal })
+}
+
+export async function deleteCluePack(id: string, xsrfToken: string, signal?: AbortSignal): Promise<void> {
+  return apiRequest<void>(`${API_PATHS.cluePacks.root}/${id}`, { method: 'DELETE', xsrfToken, signal })
+}

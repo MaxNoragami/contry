@@ -1,6 +1,7 @@
 using Contry.Api.Common.Errors;
 using Contry.Api.Common.Security;
 using Contry.Api.Features.Auth;
+using Contry.Api.Features.CluePacks;
 using Contry.Api.Features.Datasets;
 using Contry.Api.Features.Leaderboards;
 using Contry.Api.Features.Ranked.Challenges;
@@ -53,6 +54,7 @@ public static class ApiApplicationBuilderExtensions
 
         app.MapAuthEndpoints();
         app.MapDatasetEndpoints();
+        app.MapCluePackEndpoints();
         app.MapRankedChallengeEndpoints();
         app.MapRankedSessionEndpoints();
         app.MapRankedGuessEndpoints();

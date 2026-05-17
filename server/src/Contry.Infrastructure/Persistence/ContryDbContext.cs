@@ -1,3 +1,4 @@
+using Contry.Domain.Clues;
 using Contry.Domain.Datasets;
 using Contry.Domain.Authentication;
 using Contry.Domain.Ranked;
@@ -26,6 +27,8 @@ public sealed class ContryDbContext(DbContextOptions<ContryDbContext> options) :
     public DbSet<RankedClueUsageStat> RankedClueUsageStats => Set<RankedClueUsageStat>();
 
     public DbSet<BuiltInDatasetDocument> BuiltInDatasetDocuments => Set<BuiltInDatasetDocument>();
+
+    public DbSet<CluePack> CluePacks => Set<CluePack>();
 
     public DbSet<TestRecord> TestRecords => Set<TestRecord>();
 
@@ -149,6 +152,34 @@ public sealed class ContryDbContext(DbContextOptions<ContryDbContext> options) :
             entity.Property(document => document.Checksum).HasMaxLength(96).IsRequired();
             entity.Property(document => document.Content).IsRequired();
             entity.Property(document => document.UpdatedAtUtc).IsRequired();
+        });
+
+        modelBuilder.Entity<CluePack>(entity =>
+        {
+            entity.ToTable("clue_packs");
+
+            entity.HasKey(pack => pack.Id);
+            entity.Property(pack => pack.DatasetId).HasMaxLength(96).IsRequired();
+            entity.Property(pack => pack.Label).HasMaxLength(120).IsRequired();
+            entity.Property(pack => pack.Description).HasMaxLength(120).IsRequired();
+            entity.Property(pack => pack.Type).HasMaxLength(32).IsRequired();
+            entity.Property(pack => pack.Comparator).HasMaxLength(32).IsRequired();
+            entity.Property(pack => pack.UnitSymbol).HasMaxLength(32);
+            entity.Property(pack => pack.Icon).HasMaxLength(64).IsRequired();
+            entity.Property(pack => pack.CategoriesJson).HasColumnType("jsonb");
+            entity.Property(pack => pack.RowsJson).HasColumnType("jsonb").IsRequired();
+            entity.Property(pack => pack.Visibility).HasMaxLength(16).IsRequired();
+            entity.Property(pack => pack.CreatedAtUtc).IsRequired();
+            entity.Property(pack => pack.UpdatedAtUtc).IsRequired();
+
+            entity.HasIndex(pack => pack.OwnerId);
+            entity.HasIndex(pack => new { pack.OwnerId, pack.DatasetId }).IsUnique();
+            entity.HasIndex(pack => pack.UpdatedAtUtc);
+
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(pack => pack.OwnerId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<RefreshSession>(entity =>

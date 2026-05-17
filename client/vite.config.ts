@@ -22,6 +22,7 @@ export default defineConfig({
       '/xsrf': devApiTarget,
       '/ranked': devApiTarget,
       '/leaderboards': devApiTarget,
+      '/clue-packs': devApiTarget,
       '/datasets': devApiTarget,
       '/health': devApiTarget,
       '/test-records': devApiTarget,

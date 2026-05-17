@@ -2,6 +2,7 @@ import type { IDBPDatabase } from 'idb'
 import type { ContryDBSchema } from '../stores/db'
 import type { DatasetClueEntry, DatasetManifest } from './manifest'
 import { resolveTemperatureClueForMonth } from './manifest'
+import { loadWorkspaceCustomClues } from '../clues/workspace'
 
 export type ResolvedRuntimeClue = {
   id: string
@@ -12,10 +13,7 @@ export type ResolvedRuntimeClue = {
 export async function loadCustomCluesFromSettings(
   db: IDBPDatabase<ContryDBSchema>
 ): Promise<DatasetClueEntry[]> {
-  const settings = db.transaction('settings', 'readonly').objectStore('settings')
-  const raw = await settings.get('custom_clues')
-  if (!Array.isArray(raw)) return []
-  return raw as DatasetClueEntry[]
+  return loadWorkspaceCustomClues(db)
 }
 
 export function buildRuntimeClueRegistry(

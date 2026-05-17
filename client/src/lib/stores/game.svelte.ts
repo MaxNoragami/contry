@@ -11,6 +11,12 @@ import {
   getDB,
 } from './db'
 import { APP_LIMITS, APP_TIMINGS, DEFAULT_CLUE_IDS } from '../config/app'
+import {
+  loadWorkspaceCustomClues,
+  loadWorkspaceSelectedClues,
+  materializeWorkspaceCustomRows,
+  saveWorkspaceSelectedClues,
+} from '../clues/workspace'
 import { syncDatasets } from '../datasets/ingest'
 import { evaluateCategorical, evaluateNumeric, evaluateHemisphere, evaluateCoordinates } from '../engine/clues'
 import type { DatasetClueEntry, DatasetManifest } from '../datasets/manifest'
@@ -227,7 +233,7 @@ export function createArcadeGameState() {
            // We can safely apply new clues if no guesses have been made
            const db = await getDB()
            const metaStore = db.transaction('settings', 'readonly').objectStore('settings')
-           const saved = await metaStore.get('selected_clues')
+            const saved = await loadWorkspaceSelectedClues(db)
            let newClues = Array.isArray(saved) ? saved : DEFAULT_CLUES
             if (newClues.length !== APP_LIMITS.activeClueCount) newClues = DEFAULT_CLUES
            userClues = newClues
@@ -472,9 +478,9 @@ export function createArcadeGameState() {
 
   async function refreshCustomClueCatalog(broadcast = true) {
     const db = await getDB()
-    const settingsStore = db.transaction('settings', 'readonly').objectStore('settings')
-    const customClues = await settingsStore.get('custom_clues')
-    const savedClues = await settingsStore.get('selected_clues')
+    await materializeWorkspaceCustomRows(db)
+    const customClues = await loadWorkspaceCustomClues(db)
+    const savedClues = await loadWorkspaceSelectedClues(db)
     let nextUserClues = Array.isArray(savedClues) ? savedClues : DEFAULT_CLUES
     if (nextUserClues.length !== APP_LIMITS.activeClueCount) nextUserClues = DEFAULT_CLUES
     userClues = nextUserClues
@@ -535,14 +541,14 @@ export function createArcadeGameState() {
     try {
       const db = await getDB()
       
-      const metaStore = db.transaction('settings', 'readonly').objectStore('settings')
-      const savedClues = await metaStore.get('selected_clues')
+      const savedClues = await loadWorkspaceSelectedClues(db)
       let fetchedUserClues = Array.isArray(savedClues) ? savedClues : DEFAULT_CLUES
       if (fetchedUserClues.length !== APP_LIMITS.activeClueCount) fetchedUserClues = DEFAULT_CLUES
       userClues = fetchedUserClues
 
       // Fetch custom clues BEFORE syncDatasets to avoid transaction closing
-      const customClues = await metaStore.get('custom_clues')
+      const customClues = await loadWorkspaceCustomClues(db)
+      await materializeWorkspaceCustomRows(db)
 
       // 1. Sync datasets
       manifest = await syncDatasets(userClues)
@@ -682,8 +688,7 @@ export function createArcadeGameState() {
     hasGivenUp = false
     
     const db = await getDB()
-    const metaStore = db.transaction('settings', 'readonly').objectStore('settings')
-    const savedClues = await metaStore.get('selected_clues')
+     const savedClues = await loadWorkspaceSelectedClues(db)
     let fetchedUserClues = Array.isArray(savedClues) ? savedClues : DEFAULT_CLUES
     if (fetchedUserClues.length !== APP_LIMITS.activeClueCount) fetchedUserClues = DEFAULT_CLUES
     userClues = fetchedUserClues
@@ -803,11 +808,11 @@ export function createArcadeGameState() {
   async function saveClues(newClues: string[]) {
     userClues = newClues
     const db = await getDB()
+    await saveWorkspaceSelectedClues(db, newClues)
     const roundCustomDataSnapshot = manifest && rows.length === 0
       ? await buildRoundCustomDataSnapshot(newClues, db, manifest)
       : undefined
-    const tx = db.transaction(['settings', 'games'], 'readwrite')
-    await tx.objectStore('settings').put(newClues, 'selected_clues')
+    const tx = db.transaction(['games'], 'readwrite')
     
     // Apply to current game if no guesses
     let appliedNow = false

@@ -15,6 +15,9 @@
   import { createAuthStore } from "./lib/stores/auth.svelte";
   import { createGameModeStore } from "./lib/stores/game-mode.svelte";
   import { createRankedGameState } from "./lib/stores/ranked-game.svelte";
+  import { getActiveClueWorkspaceId, getWorkspaceIdForUser, switchActiveClueWorkspace } from "./lib/clues/workspace";
+  import { getCloudDetailFetcher, syncWorkspaceLinkedClues } from "./lib/clues/cloud";
+  import { getDB } from "./lib/stores/db";
 
   const auth = createAuthStore();
   const mode = createGameModeStore();
@@ -34,12 +37,30 @@
   let pendingRankedPrompt = $state(false);
   let previousAuthState = $state(false);
   let countdownString = $state("");
+  let activeClueWorkspace = $state(getActiveClueWorkspaceId());
 
   $effect(() => {
     void initTheme();
     void auth.init();
     void arcadeGame.initGame();
   });
+
+  $effect(() => {
+    if (auth.status === 'loading') return
+
+    const nextWorkspace = getWorkspaceIdForUser(auth.user?.id ?? null)
+    const currentWorkspace = getActiveClueWorkspaceId()
+    if (nextWorkspace === currentWorkspace && nextWorkspace === activeClueWorkspace) return
+
+    activeClueWorkspace = nextWorkspace
+    getDB().then(async (db) => {
+      await switchActiveClueWorkspace(db, nextWorkspace)
+      await syncWorkspaceLinkedClues(db, getCloudDetailFetcher(auth), { force: true })
+      await arcadeGame.refreshCustomClueCatalog(false)
+    }).catch((error) => {
+      console.error('Failed to switch clue workspace', error)
+    })
+  })
 
   $effect(() => {
     if (mode.current === 'ranked' && auth.isAuthenticated) {
@@ -218,19 +239,17 @@
 {:else}
   <div class="app-shell">
     <div class="area-header">
-      <Header
+        <Header
         onHelpClick={() => (helpOpen = true)}
         onProfileClick={handleProfileClick}
         onModeToggle={handleModeToggle}
-        onSettingsClick={() => {
-          if (mode.current === 'arcade') {
+          onSettingsClick={() => {
             settingsOpen = true;
-          }
-        }}
-        mode={mode.current}
-        isAuthenticated={auth.isAuthenticated}
-        settingsDisabled={mode.current === 'ranked'}
-      />
+          }}
+          mode={mode.current}
+          isAuthenticated={auth.isAuthenticated}
+          settingsDisabled={false}
+        />
     </div>
 
     <div class="area-clues">
@@ -299,7 +318,7 @@
     </div>
   </div>
 
-  <SettingsModal {game} bind:visible={settingsOpen} />
+  <SettingsModal {game} {auth} mode={mode.current} bind:visible={settingsOpen} />
 
   <HelpModal
     {game}

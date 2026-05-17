@@ -1,33 +1,45 @@
 <script lang="ts">
   import {
     ArrowLeft,
-    CloudBackup,
+    Binoculars,
     RotateCcw,
+    Save,
     GripVertical,
     Plus,
     Pencil,
   } from "lucide-svelte";
   import { fly } from "svelte/transition";
   import { APP_LIMITS, DEFAULT_CLUE_IDS, getLucideIconUrl } from "../../config/app";
-  import { getDB } from "../../stores/db";
+  import type { createAuthStore } from '../../stores/auth.svelte';
+  import type { GameMode } from '../../stores/game-mode.svelte';
 
   import type { ViewType, DraftClueData, NavDirection } from "./types";
 
   interface Props {
     game: any;
+    auth: ReturnType<typeof createAuthStore>;
+    mode: GameMode;
     onBack: () => void;
     onNavigate: (view: ViewType) => void;
+    onEditCustomClue: (clueId: string) => void | Promise<void>;
+    onBeforeExplore?: () => Promise<void> | void;
     direction: NavDirection;
     newClueDraft: DraftClueData;
   }
 
   let {
     game,
+    auth,
+    mode,
     onBack,
     onNavigate,
+    onEditCustomClue,
+    onBeforeExplore,
     direction,
     newClueDraft = $bindable(),
   }: Props = $props();
+
+  const selectionLocked = $derived(mode === 'ranked' && auth.user?.role !== 'ADMIN' ? true : mode === 'ranked');
 
   // Clues state
   type ClueState = { id: string; selected: boolean };
@@ -177,51 +189,9 @@
     onNavigate("add-clue");
   }
 
-  function handleEditCustomClue(clueId: string) {
-    // We only allow editing custom clues
-    const customMetadata = game.manifest?.clues?.find(
-      (c: any) => c.id === clueId && c.source === "custom",
-    );
-    if (!customMetadata) return;
-
-    // Load data from dataset_rows into newClueDraft
-    getDB().then(async (db) => {
-      const rowsStore = db
-        .transaction("dataset_rows", "readonly")
-        .objectStore("dataset_rows");
-      const idx = rowsStore.index("by-dataset");
-      const rows = await idx.getAll(clueId);
-
-      const loadedDraft: DraftClueData = {
-        mode: "edit",
-        originalId: customMetadata.id,
-        baselineSnapshot: null,
-        id: customMetadata.id,
-        label: customMetadata.label || customMetadata.id,
-        description: customMetadata.description || "",
-        type: customMetadata.type,
-        comparator:
-          customMetadata.comparator ||
-          (customMetadata.type === "numeric" ? "higher_lower" : "exact"),
-        unitSymbol: customMetadata.unit_symbol || "",
-        icon: customMetadata.icon || "circle-dot",
-        categories: customMetadata.categories || [],
-        data: rows.map((r) => ({ country_id: r.country_id, value: r.value })),
-      };
-      loadedDraft.baselineSnapshot = JSON.stringify({
-        id: loadedDraft.id,
-        label: loadedDraft.label,
-        description: loadedDraft.description,
-        type: loadedDraft.type,
-        comparator: loadedDraft.comparator,
-        unitSymbol: loadedDraft.unitSymbol,
-        icon: loadedDraft.icon,
-        categories: [...loadedDraft.categories],
-        data: loadedDraft.data.map((r) => ({ country_id: r.country_id, value: r.value })),
-      });
-      newClueDraft = loadedDraft;
-      onNavigate("edit-clue");
-    });
+  async function openExploreClues() {
+    await onBeforeExplore?.()
+    onNavigate('explore-clues')
   }
 </script>
 
@@ -235,29 +205,36 @@
       <ArrowLeft />
     </button>
     <h2 class="centered-title">
-      Clues <span class="counter" class:error={selectedDraftCount !== APP_LIMITS.activeClueCount}
-        >({selectedDraftCount}/{APP_LIMITS.activeClueCount})</span
-      >
+      Clues
+      {#if !selectionLocked}
+        <span class="counter" class:error={selectedDraftCount !== APP_LIMITS.activeClueCount}
+          >({selectedDraftCount}/{APP_LIMITS.activeClueCount})</span
+        >
+      {/if}
     </h2>
-    <div class="header-actions">
-      <button
-        class="icon-btn"
-        aria-label="Reset to default"
-        onclick={resetToDefault}
-      >
-        <RotateCcw />
-      </button>
-      <button
-        class="icon-btn save-btn"
-        class:is-modified={!isSaveDisabled}
-        class:is-error={selectedDraftCount !== APP_LIMITS.activeClueCount}
-        aria-label="Save"
-        onclick={saveClues}
-        disabled={isSaveDisabled}
-      >
-        <CloudBackup />
-      </button>
-    </div>
+    {#if !selectionLocked}
+      <div class="header-actions">
+        <button
+          class="icon-btn"
+          aria-label="Reset to default"
+          onclick={resetToDefault}
+        >
+          <RotateCcw />
+        </button>
+        <button
+          class="icon-btn save-btn"
+          class:is-modified={!isSaveDisabled}
+          class:is-error={selectedDraftCount !== APP_LIMITS.activeClueCount}
+          aria-label="Save"
+          onclick={saveClues}
+          disabled={isSaveDisabled}
+        >
+          <Save />
+        </button>
+      </div>
+    {:else}
+      <div class="header-spacer"></div>
+    {/if}
   </div>
   <div class="modal-body clues-body">
     <div class="menu-actions">
@@ -272,60 +249,71 @@
           >
         </div>
       </button>
+      <button class="clues-header-row action-btn" onclick={openExploreClues}>
+        <div class="plus-icon-container">
+          <Binoculars size={20} />
+        </div>
+        <div class="clues-header-text">
+          <span>Explore clues</span>
+          <span class="muted" style="font-size: 13px;">Browse published clue packs</span>
+        </div>
+      </button>
     </div>
 
-    <div class="clues-list" role="list">
-      {#each draftList as item, index (item.id)}
-        {@const clueDef = game.availableClues.find(
-          (c: any) => c.id === item.id,
-        )}
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-          class="clue-item"
-          class:is-dragged={draggedIndex === index}
-          draggable="true"
-          data-index={index}
-          ondragstart={(e) => dragStart(e, index)}
-          ondragover={(e) => dragOver(e, index)}
-          ondragend={dragEnd}
-          ontouchstart={(e) => handleTouchStart(e, index)}
-          ontouchmove={handleTouchMove}
-          ontouchend={handleTouchEnd}
-          ontouchcancel={handleTouchCancel}
-        >
-          <div class="drag-handle">
-            <GripVertical size={18} />
-          </div>
-          <div class="clue-icon-wrapper">
-            {#if clueDef?.icon}
-              {@const IconComponent = clueDef.icon}
-              <IconComponent size={20} />
-            {:else if clueDef?.customIcon}
-              <div class="custom-icon" style={`mask-image: url('${getLucideIconUrl(clueDef.customIcon)}'); -webkit-mask-image: url('${getLucideIconUrl(clueDef.customIcon)}');`}></div>
-            {/if}
-          </div>
-          <span
-            class="clue-label"
-            class:is-custom={clueDef?.source === "custom"}
+    {#if !selectionLocked}
+      <div class="clues-list" role="list">
+        {#each draftList as item, index (item.id)}
+          {@const clueDef = game.availableClues.find(
+            (c: any) => c.id === item.id,
+          )}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class="clue-item"
+            class:is-dragged={draggedIndex === index}
+            draggable="true"
+            data-index={index}
+            ondragstart={(e) => dragStart(e, index)}
+            ondragover={(e) => dragOver(e, index)}
+            ondragend={dragEnd}
+            ontouchstart={(e) => handleTouchStart(e, index)}
+            ontouchmove={handleTouchMove}
+            ontouchend={handleTouchEnd}
+            ontouchcancel={handleTouchCancel}
           >
-            {clueDef?.label || item.id}
-          </span>
-          {#if clueDef?.source === "custom"}
-            <button
-              class="edit-btn"
-              aria-label="Edit custom clue"
-              onclick={() => handleEditCustomClue(item.id)}
+            <div class="drag-handle">
+              <GripVertical size={18} />
+            </div>
+            <div class="clue-icon-wrapper">
+              {#if clueDef?.icon}
+                {@const IconComponent = clueDef.icon}
+                <IconComponent size={20} />
+              {:else if clueDef?.customIcon}
+                <div class="custom-icon" style={`mask-image: url('${getLucideIconUrl(clueDef.customIcon)}'); -webkit-mask-image: url('${getLucideIconUrl(clueDef.customIcon)}');`}></div>
+              {/if}
+            </div>
+            <span
+              class="clue-label"
+              class:is-custom={clueDef?.source === "custom"}
             >
-              <Pencil size={16} />
-            </button>
-          {/if}
-          <label class="checkbox-wrapper">
-            <input type="checkbox" bind:checked={item.selected} />
-            <span class="checkmark"></span>
-          </label>
-        </div>
-      {/each}
-    </div>
+              {clueDef?.label || item.id}
+            </span>
+            {#if clueDef?.source === "custom"}
+              <button
+                class="edit-btn"
+                aria-label="Edit custom clue"
+                onclick={() => onEditCustomClue(item.id)}
+              >
+                <Pencil size={16} />
+              </button>
+            {/if}
+            <label class="checkbox-wrapper">
+              <input type="checkbox" bind:checked={item.selected} />
+              <span class="checkmark"></span>
+            </label>
+          </div>
+        {/each}
+      </div>
+    {/if}
   </div>
 </div>
 
@@ -376,6 +364,11 @@
   .header-actions {
     display: flex;
     gap: 8px;
+  }
+
+  .header-spacer {
+    width: 40px;
+    height: 40px;
   }
 
   .icon-btn {

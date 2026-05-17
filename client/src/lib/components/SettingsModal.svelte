@@ -4,10 +4,18 @@
   import CluesSettings from "./settings/CluesSettings.svelte";
   import AddClueSettings from "./settings/AddClueSettings.svelte";
   import EditClueSettings from "./settings/EditClueSettings.svelte";
+  import ExploreCluesSettings from "./settings/ExploreCluesSettings.svelte";
+  import ViewClueSettings from "./settings/ViewClueSettings.svelte";
   import IconPickerSettings from "./settings/IconPickerSettings.svelte";
 import DatasetEditorSettings from "./settings/DatasetEditorSettings.svelte";
 import { APP_TIMINGS } from "../config/app";
+import { DEFAULT_CLUE_IDS } from "../config/app";
+import { getCluePack } from "../api/client";
+import { canPushCloudLink, getCloudDetailFetcher, importPublishedClueToLocal, syncWorkspaceLinkedClues } from "../clues/cloud";
+import { loadWorkspaceCloudLinks, loadWorkspaceCustomClues, loadWorkspaceCustomRows, removeWorkspaceCustomRowsForClue, saveWorkspaceCloudLinks, saveWorkspaceCustomClues, saveWorkspaceSelectedClues } from "../clues/workspace";
 import { clearAllCachedData } from "../stores/db";
+import { getDB } from "../stores/db";
+import { toastStore } from "../stores/toasts.svelte";
   import {
     cycleThemeMode,
     getThemeModeLabel,
@@ -15,13 +23,17 @@ import { clearAllCachedData } from "../stores/db";
     setThemeMode,
     type ThemeMode,
   } from "../stores/theme";
+  import type { GameMode } from "../stores/game-mode.svelte";
+  import type { createAuthStore } from "../stores/auth.svelte";
 
   interface Props {
     game: any;
+    auth: ReturnType<typeof createAuthStore>;
+    mode: GameMode;
     visible: boolean;
   }
 
-  let { game, visible = $bindable(false) }: Props = $props();
+  let { game, auth, mode, visible = $bindable(false) }: Props = $props();
 
   import type { ViewType, DraftClueData, NavDirection } from "./settings/types";
 
@@ -48,7 +60,12 @@ import { clearAllCachedData } from "../stores/db";
     unitSymbol: "",
     icon: "circle-dot",
     categories: [],
-    data: [],
+      data: [],
+      remoteId: null,
+      ownerId: null,
+      ownerUsername: null,
+      visibility: null,
+      readOnly: false,
   });
 
   function resetEditGuard() {
@@ -144,11 +161,107 @@ import { clearAllCachedData } from "../stores/db";
     }
   }
 
-  function openClues() {
+  async function openClues() {
+    if (mode === 'ranked' && auth.user?.role !== 'ADMIN') {
+      return;
+    }
+    const db = await getDB()
+    await syncWorkspaceLinkedClues(db, getCloudDetailFetcher(auth), { force: true })
+    await game.refreshCustomClueCatalog(false)
     navDirection = "forward";
     view = "clues";
     resetAddGuard();
     resetEditGuard();
+  }
+
+  async function openLocalCustomClue(clueId: string) {
+    const db = await getDB()
+    await syncWorkspaceLinkedClues(db, getCloudDetailFetcher(auth), { force: true })
+    await game.refreshCustomClueCatalog(false)
+    const customClues = await loadWorkspaceCustomClues(db) as any[]
+    const cloudLinks = await loadWorkspaceCloudLinks(db)
+    const cloudLink = cloudLinks[clueId] || null
+    const customMetadata = customClues.find((c) => c.id === clueId && c.source === 'custom')
+    if (!customMetadata) return
+
+    const rowsMap = await loadWorkspaceCustomRows(db)
+    const rows = rowsMap[clueId] || []
+
+    const loadedDraft: DraftClueData = {
+      mode: cloudLink && !canPushCloudLink(cloudLink, auth.user?.id, auth.user?.role) ? 'view' : 'edit',
+      originalId: customMetadata.id,
+      baselineSnapshot: null,
+      id: customMetadata.id,
+      label: customMetadata.label || customMetadata.id,
+      description: customMetadata.description || '',
+      type: customMetadata.type,
+      comparator: customMetadata.comparator || (customMetadata.type === 'numeric' ? 'higher_lower' : 'exact'),
+      unitSymbol: customMetadata.unit_symbol || '',
+      icon: customMetadata.icon || 'circle-dot',
+      categories: customMetadata.categories || [],
+      data: rows.map((r) => ({ country_id: r.country_id, value: r.value })),
+      remoteId: cloudLink?.remoteId || null,
+      ownerId: cloudLink?.ownerId || null,
+      ownerUsername: cloudLink?.ownerUsername || null,
+      visibility: cloudLink?.visibility || null,
+      readOnly: !!cloudLink && !canPushCloudLink(cloudLink, auth.user?.id, auth.user?.role),
+    }
+
+    loadedDraft.baselineSnapshot = JSON.stringify({
+      id: loadedDraft.id,
+      label: loadedDraft.label,
+      description: loadedDraft.description,
+      type: loadedDraft.type,
+      comparator: loadedDraft.comparator,
+      unitSymbol: loadedDraft.unitSymbol,
+      icon: loadedDraft.icon,
+      categories: [...loadedDraft.categories],
+      data: loadedDraft.data.map((row) => ({ country_id: row.country_id, value: row.value })),
+    })
+
+    newClueDraft = loadedDraft
+    navigateTo(loadedDraft.readOnly ? 'view-clue' : 'edit-clue')
+  }
+
+  async function openPublishedCluePack(cluePackId: string) {
+    try {
+      const db = await getDB()
+      await syncWorkspaceLinkedClues(db, getCloudDetailFetcher(auth))
+      const detail = await getCluePack(cluePackId)
+      const imported = await importPublishedClueToLocal(db, detail)
+      await game.refreshCustomClueCatalog(false)
+      await openLocalCustomClue(imported.localId)
+    } catch (error) {
+      toastStore.push('Could not open the published clue. Please try again.')
+    }
+  }
+
+  async function removeViewedLocalCopy() {
+    const deleteId = newClueDraft.id
+    const db = await getDB()
+    const existingClues = await loadWorkspaceCustomClues(db)
+    await saveWorkspaceCustomClues(db, existingClues.filter((c) => c.id !== deleteId))
+
+    const selected = game.userClues.filter((id: string) => id !== deleteId)
+    const availableIds = existingClues.map((c) => c.id).filter((id) => id !== deleteId)
+    let nextSelected = [...selected]
+    for (const id of availableIds) {
+      if (nextSelected.length >= 5) break
+      if (!nextSelected.includes(id)) nextSelected.push(id)
+    }
+    for (const id of DEFAULT_CLUE_IDS) {
+      if (nextSelected.length >= 5) break
+      if (id !== deleteId && !nextSelected.includes(id)) nextSelected.push(id)
+    }
+    await saveWorkspaceSelectedClues(db, nextSelected.slice(0, 5))
+    await removeWorkspaceCustomRowsForClue(db, deleteId)
+
+    const links = await loadWorkspaceCloudLinks(db)
+    delete links[deleteId]
+    await saveWorkspaceCloudLinks(db, links)
+
+    await game.refreshCustomClueCatalog(false)
+    goBack()
   }
 
   async function cycleTheme() {
@@ -255,13 +368,13 @@ import { clearAllCachedData } from "../stores/db";
           </div>
           <div class="modal-body">
             <div class="settings-list menu-actions">
-              <button class="settings-item" onclick={openClues}>
+              <button class="settings-item" onclick={openClues} disabled={mode === 'ranked' && auth.user?.role !== 'ADMIN'}>
                 <div class="settings-item-icon">
                   <CircleDot />
                 </div>
                 <div class="settings-item-text">
                   <span>Clues</span>
-                  <span class="muted">Customize game clues</span>
+                  <span class="muted">{mode === 'ranked' && auth.user?.role !== 'ADMIN' ? 'Available in arcade or for admins' : 'Customize game clues'}</span>
                 </div>
               </button>
               <button class="settings-item" onclick={cycleTheme}>
@@ -319,16 +432,29 @@ import { clearAllCachedData } from "../stores/db";
       {#if view === "clues"}
         <CluesSettings
           {game}
+          {auth}
+          {mode}
           onBack={goBack}
           onNavigate={navigateTo}
+          onEditCustomClue={openLocalCustomClue}
+          onBeforeExplore={() => getDB().then(async (db) => { await syncWorkspaceLinkedClues(db, getCloudDetailFetcher(auth), { force: true }); await game.refreshCustomClueCatalog(false) })}
           direction={navDirection}
           bind:newClueDraft
+        />
+      {/if}
+
+      {#if view === "explore-clues"}
+        <ExploreCluesSettings
+          onBack={goBack}
+          direction={navDirection}
+          onOpenCluePack={openPublishedCluePack}
         />
       {/if}
 
       {#if view === "add-clue"}
         <AddClueSettings
           {game}
+          {auth}
           onBack={goBack}
           onNavigate={navigateTo}
           direction={navDirection}
@@ -341,11 +467,23 @@ import { clearAllCachedData } from "../stores/db";
       {#if view === "edit-clue"}
         <EditClueSettings
           {game}
+          {auth}
           onBack={goBack}
           onNavigate={navigateTo}
           direction={navDirection}
           bind:hasUnsavedChanges={editHasUnsavedChanges}
           bind:discardPromptVisible={editDiscardPromptVisible}
+          bind:newClueDraft
+        />
+      {/if}
+
+      {#if view === "view-clue"}
+        <ViewClueSettings
+          {auth}
+          onBack={goBack}
+          onNavigate={navigateTo as (view: 'dataset-editor') => void}
+          onRemoveLocalCopy={removeViewedLocalCopy}
+          direction={navDirection}
           bind:newClueDraft
         />
       {/if}
@@ -515,13 +653,18 @@ import { clearAllCachedData } from "../stores/db";
     border-bottom: none;
   }
 
+  .settings-item:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+
   @media (hover: hover) {
-    .settings-item:hover {
+    .settings-item:hover:not(:disabled) {
       background: var(--hover-soft);
     }
   }
 
-  .settings-item:active {
+  .settings-item:active:not(:disabled) {
     background: var(--hover-soft);
   }
 

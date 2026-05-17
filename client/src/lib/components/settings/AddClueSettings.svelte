@@ -2,22 +2,29 @@
   import {
     ArrowLeft,
     Download,
+    Save,
     Upload,
     X,
     Image as ImageIcon,
     Table2,
-    CloudBackup,
     TriangleAlert,
   } from "lucide-svelte";
   import { fly } from "svelte/transition";
   import Papa from "papaparse";
-  import { APP_LIMITS } from "../../config/app";
+  import { API_PATHS, APP_LIMITS } from "../../config/app";
+  import type { CluePackDetailDto } from "../../api/client";
+  import { createCloudLinkFromDetail, setClueCloudLink } from "../../clues/cloud";
+  import { loadWorkspaceCustomClues, saveWorkspaceCustomClues, setWorkspaceCustomRowsForClue } from "../../clues/workspace";
+  import { getProblemMessage } from "../../stores/auth.svelte";
   import type { ViewType, DraftClueData, NavDirection } from "./types";
   import { getDB } from "../../stores/db";
   import type { DatasetClueEntry } from "../../datasets/manifest";
+  import type { createAuthStore } from '../../stores/auth.svelte';
+  import { toastStore } from '../../stores/toasts.svelte';
 
   interface Props {
     game: any;
+    auth: ReturnType<typeof createAuthStore>;
     onBack: () => void;
     onNavigate: (view: ViewType) => void;
     direction: NavDirection;
@@ -28,6 +35,7 @@
 
   let {
     game,
+    auth,
     onBack,
     onNavigate,
     direction,
@@ -37,6 +45,7 @@
   }: Props = $props();
 
   let fileInput = $state<HTMLInputElement | undefined>();
+  let cloudBusy = $state(false);
 
   // --- In-modal dialog state ---
   let uploadError = $state<string | null>(null);
@@ -273,33 +282,66 @@
 
   // --- Save logic ---
   async function handleSave() {
-    if (!newClueDraft.id || !newClueDraft.label || !newClueDraft.description.trim()) return;
+    if (cloudBusy) return
+    const shouldPublish = auth.isAuthenticated
+    const localId = await persistDraftLocally(!shouldPublish)
+    if (!localId) return
+
+    if (!shouldPublish) {
+      return
+    }
+
+    cloudBusy = true
+    try {
+      const detail = await auth.request<CluePackDetailDto>(API_PATHS.cluePacks.root, {
+        method: 'POST',
+        body: {
+        datasetId: localId,
+        label: newClueDraft.label,
+        description: newClueDraft.description.trim(),
+        type: newClueDraft.type,
+        comparator: newClueDraft.comparator,
+        unitSymbol: newClueDraft.type === 'numeric' && newClueDraft.unitSymbol.trim() ? newClueDraft.unitSymbol.trim() : null,
+        icon: newClueDraft.icon,
+        categories: newClueDraft.type === 'categorical' ? [...newClueDraft.categories] : [],
+        rows: newClueDraft.data.map((row) => ({ countryId: row.country_id, value: row.value ?? null })),
+        visibility: 'public',
+        },
+      })
+
+      const db = await getDB()
+      await setClueCloudLink(db, localId, createCloudLinkFromDetail(detail))
+      toastStore.push('Clue saved and published to the cloud.', 'success')
+      hasUnsavedChanges = false
+      onBack()
+    } catch (error) {
+      toastStore.push(getProblemMessage(error))
+    } finally {
+      cloudBusy = false
+    }
+  }
+
+  async function persistDraftLocally(closeAfterSave: boolean): Promise<string | null> {
+    if (!newClueDraft.id || !newClueDraft.label || !newClueDraft.description.trim()) return null;
 
     const db = await getDB();
-    const metaStore = db
-      .transaction("settings", "readwrite")
-      .objectStore("settings");
-    const existingClues: DatasetClueEntry[] =
-      (await metaStore.get("custom_clues")) || [];
+    const existingClues = await loadWorkspaceCustomClues(db)
 
     const targetId = newClueDraft.id;
     const existingIndex = existingClues.findIndex((c) => c.id === targetId);
 
     if (existingIndex !== -1) {
       collisionState = { show: true, existingId: targetId };
-      return;
+      return null;
     }
 
-    await persistClue(existingClues, existingIndex, targetId);
+    await persistClue(existingClues, existingIndex, targetId, closeAfterSave);
+    return targetId;
   }
 
   async function handleCollisionChoice(overwrite: boolean) {
     const db = await getDB();
-    const metaStore = db
-      .transaction("settings", "readwrite")
-      .objectStore("settings");
-    const existingClues: DatasetClueEntry[] =
-      (await metaStore.get("custom_clues")) || [];
+    const existingClues = await loadWorkspaceCustomClues(db)
 
     let targetId = collisionState.existingId;
     const existingIndex = existingClues.findIndex((c) => c.id === targetId);
@@ -314,13 +356,42 @@
       newClueDraft.id = targetId;
     }
 
-    await persistClue(existingClues, overwrite ? existingIndex : -1, targetId);
+    await persistClue(existingClues, overwrite ? existingIndex : -1, targetId, false);
+    if (auth.isAuthenticated) {
+      cloudBusy = true
+      try {
+        const detail = await auth.request<CluePackDetailDto>(API_PATHS.cluePacks.root, {
+          method: 'POST',
+          body: {
+            datasetId: targetId,
+            label: newClueDraft.label,
+            description: newClueDraft.description.trim(),
+            type: newClueDraft.type,
+            comparator: newClueDraft.comparator,
+            unitSymbol: newClueDraft.type === 'numeric' && newClueDraft.unitSymbol.trim() ? newClueDraft.unitSymbol.trim() : null,
+            icon: newClueDraft.icon,
+            categories: newClueDraft.type === 'categorical' ? [...newClueDraft.categories] : [],
+            rows: newClueDraft.data.map((row) => ({ countryId: row.country_id, value: row.value ?? null })),
+            visibility: 'public',
+          },
+        })
+        await setClueCloudLink(db, targetId, createCloudLinkFromDetail(detail))
+        toastStore.push('Clue saved and published to the cloud.', 'success')
+      } catch (error) {
+        toastStore.push(getProblemMessage(error))
+      } finally {
+        cloudBusy = false
+      }
+    }
+    hasUnsavedChanges = false
+    onBack()
   }
 
   async function persistClue(
     existingClues: DatasetClueEntry[],
     existingIndex: number,
     targetId: string,
+    closeAfterSave: boolean,
   ) {
     const newClueEntry: DatasetClueEntry = {
       id: targetId,
@@ -347,30 +418,23 @@
     }
 
     const db = await getDB();
-    const serializableClues = existingClues.map((c) => ({
+    const serializableClues: DatasetClueEntry[] = existingClues.map((c) => ({
       ...c,
       categories: c.categories ? [...c.categories] : undefined,
     }));
-    const metaTx = db.transaction("settings", "readwrite");
-    await metaTx.objectStore("settings").put(serializableClues, "custom_clues");
-    await metaTx.done;
+    await saveWorkspaceCustomClues(db, serializableClues)
 
-    // Save rows
-    const tx = db.transaction("dataset_rows", "readwrite");
-    const rowsStore = tx.objectStore("dataset_rows");
-    for (const row of newClueDraft.data) {
-      await rowsStore.put({
-        dataset_id: targetId,
-        country_id: row.country_id,
-        value: row.value,
-      });
-    }
-    await tx.done;
+    await setWorkspaceCustomRowsForClue(db, targetId, newClueDraft.data.map((row) => ({
+      country_id: row.country_id,
+      value: row.value ?? null,
+    })))
 
     // Refresh clue catalog without forcing current round to rebuild unless untouched
     await game.refreshCustomClueCatalog();
     hasUnsavedChanges = false;
-    onBack();
+    if (closeAfterSave) {
+      onBack();
+    }
   }
 
   const isSaveDisabled = $derived(
@@ -446,9 +510,9 @@
           class:is-ready={!isSaveDisabled}
           aria-label="Save"
           onclick={handleSave}
-          disabled={isSaveDisabled}
+          disabled={isSaveDisabled || cloudBusy}
         >
-          <CloudBackup />
+          <Save />
         </button>
       </div>
     </div>
@@ -683,6 +747,11 @@
   }
   .save-btn.is-ready {
     color: var(--accent);
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 8px;
   }
 
   .form-body {

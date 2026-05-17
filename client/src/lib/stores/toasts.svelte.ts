@@ -1,6 +1,6 @@
 import { APP_LIMITS, APP_TIMINGS } from '../config/app'
 
-export type ToastTone = 'error'
+export type ToastTone = 'error' | 'success'
 
 export type ToastItem = {
   id: string
