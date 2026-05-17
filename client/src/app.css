@@ -44,6 +44,9 @@
   --toast-error-bg: color-mix(in oklab, var(--bad) 22%, var(--panel));
   --toast-error-border: color-mix(in oklab, var(--bad) 55%, var(--panel-3));
   --toast-error-text: var(--text);
+  --toast-success-bg: color-mix(in oklab, var(--ok) 22%, var(--panel));
+  --toast-success-border: color-mix(in oklab, var(--ok) 55%, var(--panel-3));
+  --toast-success-text: var(--text);
 }
 
 :root[data-theme='light'] {
@@ -85,6 +88,9 @@
   --toast-error-bg: color-mix(in oklab, var(--bad) 18%, var(--panel));
   --toast-error-border: color-mix(in oklab, var(--bad) 42%, var(--border));
   --toast-error-text: var(--text);
+  --toast-success-bg: color-mix(in oklab, var(--ok) 18%, var(--panel));
+  --toast-success-border: color-mix(in oklab, var(--ok) 42%, var(--border));
+  --toast-success-text: var(--text);
 }
 
 /* ── Reset ────────────────────────────────────────── */

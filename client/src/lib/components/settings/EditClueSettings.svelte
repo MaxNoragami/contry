@@ -1,23 +1,46 @@
 <script lang="ts">
   import {
     ArrowLeft,
+    Image as ImageIcon,
+    Save,
+    Table2,
+    Trash2,
+    TriangleAlert,
     Upload,
     X,
-    Image as ImageIcon,
-    Table2,
-    CloudBackup,
-    TriangleAlert,
-    Trash2,
   } from "lucide-svelte";
   import { fly } from "svelte/transition";
   import Papa from "papaparse";
-  import { APP_LIMITS } from "../../config/app";
-  import type { ViewType, DraftClueData, NavDirection } from "./types";
+  import { API_PATHS, APP_LIMITS } from "../../config/app";
+  import { getCluePack, type CluePackDetailDto } from "../../api/client";
+  import {
+    canPushCloudLink,
+    createCloudLinkFromDetail,
+    loadClueCloudLinks,
+    markClueCloudLinkDirty,
+    overwriteLocalClueFromRemote,
+    removeClueCloudLink,
+    setClueCloudLink,
+    type ClueCloudLink,
+  } from "../../clues/cloud";
+  import {
+    loadWorkspaceCustomClues,
+    loadWorkspaceSelectedClues,
+    removeWorkspaceCustomRowsForClue,
+    saveWorkspaceCustomClues,
+    saveWorkspaceSelectedClues,
+    setWorkspaceCustomRowsForClue,
+  } from "../../clues/workspace";
+  import { getProblemMessage } from "../../stores/auth.svelte";
   import { getDB } from "../../stores/db";
+  import { toastStore } from "../../stores/toasts.svelte";
   import type { DatasetClueEntry } from "../../datasets/manifest";
+  import type { createAuthStore } from "../../stores/auth.svelte";
+  import type { ViewType, DraftClueData, NavDirection } from "./types";
 
   interface Props {
     game: any;
+    auth: ReturnType<typeof createAuthStore>;
     onBack: () => void;
     onNavigate: (view: ViewType) => void;
     direction: NavDirection;
@@ -28,21 +51,24 @@
 
   let {
     game,
+    auth,
     onBack,
     onNavigate,
     direction,
     hasUnsavedChanges = $bindable(false),
     discardPromptVisible = $bindable(false),
     newClueDraft = $bindable(),
-  }: Props =
-    $props();
+  }: Props = $props();
 
   let fileInput = $state<HTMLInputElement | undefined>();
   let uploadError = $state<string | null>(null);
   let typeWarning = $state<string | null>(null);
   let deletePromptVisible = $state(false);
+  let globalDeletePromptVisible = $state(false);
   let uploadedFileName = $state<string | null>(null);
   let uploadedFileSize = $state<string | null>(null);
+  let cloudBusy = $state(false);
+  let cloudLink = $state<ClueCloudLink | null>(null);
 
   function serializeDraft() {
     return JSON.stringify({
@@ -81,6 +107,14 @@
     }
   });
 
+  $effect(() => {
+    if (!newClueDraft.id) return;
+    getDB().then(async (db) => {
+      const links = await loadClueCloudLinks(db);
+      cloudLink = links[newClueDraft.id] || null;
+    });
+  });
+
   const serializedDraft = $derived.by(() =>
     JSON.stringify({
       id: newClueDraft.id,
@@ -95,12 +129,18 @@
     }),
   );
 
-  const isDirty = $derived(
-    !!newClueDraft.baselineSnapshot && serializedDraft !== newClueDraft.baselineSnapshot,
-  );
+  const isDirty = $derived(!!newClueDraft.baselineSnapshot && serializedDraft !== newClueDraft.baselineSnapshot);
+  const canPushLink = $derived(canPushCloudLink(cloudLink, auth.user?.id, auth.user?.role));
+  const isSaveDisabled = $derived(!isDirty || !newClueDraft.id || !newClueDraft.label || !newClueDraft.description.trim() || newClueDraft.data.length === 0);
+  const missingDataCount = $derived.by(() => newClueDraft.data.filter((d) => d.value === null || d.value === undefined || d.value === "").length);
 
   $effect(() => {
     hasUnsavedChanges = isDirty;
+  });
+
+  $effect(() => {
+    if (!newClueDraft.data.length) return;
+    recomputeDraftType(false);
   });
 
   function handleBack() {
@@ -230,11 +270,9 @@
   }
 
   async function handleSave() {
-    if (!isDirty || !newClueDraft.id || !newClueDraft.label || !newClueDraft.description.trim()) return;
+    if (isSaveDisabled) return;
     const db = await getDB();
-    const tx = db.transaction("settings", "readwrite");
-    const store = tx.objectStore("settings");
-    const existingClues: DatasetClueEntry[] = (await store.get("custom_clues")) || [];
+    const existingClues = await loadWorkspaceCustomClues(db)
     const index = existingClues.findIndex((c) => c.id === newClueDraft.id);
     if (index === -1) return;
 
@@ -247,21 +285,47 @@
       unit_symbol: newClueDraft.unitSymbol,
       categories: newClueDraft.type === "categorical" ? [...newClueDraft.categories] : undefined,
     };
-    await store.put(existingClues.map((c) => ({ ...c, categories: c.categories ? [...c.categories] : undefined })), "custom_clues");
-    await tx.done;
+    await saveWorkspaceCustomClues(db, existingClues.map((c) => ({ ...c, categories: c.categories ? [...c.categories] : undefined })));
 
-    const rowsTx = db.transaction("dataset_rows", "readwrite");
-    const rowsStore = rowsTx.objectStore("dataset_rows");
-    const idx = rowsStore.index("by-dataset");
-    let cursor = await idx.openCursor(newClueDraft.id);
-    while (cursor) {
-      await cursor.delete();
-      cursor = await cursor.continue();
+    await setWorkspaceCustomRowsForClue(db, newClueDraft.id, newClueDraft.data.map((row) => ({
+      country_id: row.country_id,
+      value: row.value ?? null,
+    })));
+
+    await markClueCloudLinkDirty(db, newClueDraft.id);
+
+    if (auth.isAuthenticated && (!cloudLink || canPushLink)) {
+      try {
+        const body = {
+          datasetId: newClueDraft.id,
+          label: newClueDraft.label,
+          description: newClueDraft.description.trim(),
+          type: newClueDraft.type,
+          comparator: newClueDraft.comparator,
+          unitSymbol: newClueDraft.type === "numeric" && newClueDraft.unitSymbol.trim() ? newClueDraft.unitSymbol.trim() : null,
+          icon: newClueDraft.icon,
+          categories: newClueDraft.type === "categorical" ? [...newClueDraft.categories] : [],
+          rows: newClueDraft.data.map((row) => ({ countryId: row.country_id, value: row.value ?? null })),
+          visibility: cloudLink?.visibility || 'public',
+        }
+        const wasPublished = !!cloudLink
+        const detail = cloudLink
+          ? await auth.request<CluePackDetailDto>(`${API_PATHS.cluePacks.root}/${cloudLink.remoteId}`, {
+              method: 'PUT',
+              body,
+            })
+          : await auth.request<CluePackDetailDto>(API_PATHS.cluePacks.root, {
+              method: 'POST',
+              body,
+            })
+        const nextLink = createCloudLinkFromDetail(detail)
+        await setClueCloudLink(db, newClueDraft.id, nextLink)
+        cloudLink = nextLink
+        toastStore.push(wasPublished ? 'Clue saved and synced to the cloud.' : 'Clue saved and published to the cloud.', 'success')
+      } catch (error) {
+        toastStore.push(getProblemMessage(error))
+      }
     }
-    for (const row of newClueDraft.data) {
-      await rowsStore.put({ dataset_id: newClueDraft.id, country_id: row.country_id, value: row.value });
-    }
-    await rowsTx.done;
 
     await game.refreshCustomClueCatalog();
     newClueDraft.baselineSnapshot = serializedDraft;
@@ -269,14 +333,32 @@
     onBack();
   }
 
-  async function handleDelete() {
+  async function handleDeleteGlobal() {
+    if (!cloudLink || !canPushLink || cloudBusy) return;
+    cloudBusy = true;
+    try {
+      const db = await getDB();
+      await auth.request<void>(`${API_PATHS.cluePacks.root}/${cloudLink.remoteId}`, { method: 'DELETE' });
+      await removeClueCloudLink(db, newClueDraft.id);
+      cloudLink = null;
+      deletePromptVisible = false;
+      globalDeletePromptVisible = false;
+      await handleDeleteLocal(true);
+      toastStore.push("Published clue deleted from the cloud.", 'success');
+      onBack();
+    } catch (error) {
+      toastStore.push(getProblemMessage(error));
+    } finally {
+      cloudBusy = false;
+    }
+  }
+
+  async function handleDeleteLocal(skipClose = false) {
     const deleteId = newClueDraft.id;
     const db = await getDB();
-    const settingsTx = db.transaction("settings", "readwrite");
-    const settingsStore = settingsTx.objectStore("settings");
-    const existingClues: DatasetClueEntry[] = (await settingsStore.get("custom_clues")) || [];
-    await settingsStore.put(existingClues.filter((c) => c.id !== deleteId), "custom_clues");
-    const selected = (await settingsStore.get("selected_clues")) || [];
+    const existingClues = await loadWorkspaceCustomClues(db)
+    await saveWorkspaceCustomClues(db, existingClues.filter((c) => c.id !== deleteId));
+    const selected = await loadWorkspaceSelectedClues(db)
     let nextSelected = Array.isArray(selected) ? selected.filter((id: string) => id !== deleteId) : [];
     const availableIds = game.availableClues.map((c: any) => c.id).filter((id: string) => id !== deleteId);
     for (const id of availableIds) {
@@ -287,35 +369,33 @@
       if (nextSelected.length >= 5) break;
       if (id !== deleteId && !nextSelected.includes(id)) nextSelected.push(id);
     }
-    await settingsStore.put(nextSelected.slice(0, 5), "selected_clues");
-    await settingsTx.done;
+    await saveWorkspaceSelectedClues(db, nextSelected.slice(0, 5));
 
-    const rowsTx = db.transaction("dataset_rows", "readwrite");
-    const rowsStore = rowsTx.objectStore("dataset_rows");
-    const idx = rowsStore.index("by-dataset");
-    let cursor = await idx.openCursor(deleteId);
-    while (cursor) {
-      await cursor.delete();
-      cursor = await cursor.continue();
-    }
-    await rowsTx.done;
+    await removeWorkspaceCustomRowsForClue(db, deleteId)
 
+    await removeClueCloudLink(db, deleteId);
     await game.refreshCustomClueCatalog();
     hasUnsavedChanges = false;
-    onBack();
+    if (!skipClose) {
+      onBack();
+    }
   }
 
-  const isSaveDisabled = $derived(!isDirty || !newClueDraft.id || !newClueDraft.label || !newClueDraft.description.trim() || newClueDraft.data.length === 0);
-  const missingDataCount = $derived.by(() => newClueDraft.data.filter((d) => d.value === null || d.value === undefined || d.value === "").length);
-
-  $effect(() => {
-    if (!newClueDraft.data.length) return;
-    recomputeDraftType(false);
-  });
+  function applyCloudDetailToDraft(detail: Awaited<ReturnType<typeof getCluePack>>) {
+    newClueDraft.label = detail.label;
+    newClueDraft.description = detail.description;
+    newClueDraft.type = detail.type;
+    newClueDraft.comparator = detail.comparator;
+    newClueDraft.unitSymbol = detail.unitSymbol || "";
+    newClueDraft.icon = detail.icon;
+    newClueDraft.categories = [...detail.categories];
+    newClueDraft.data = detail.rows.map((row) => ({ country_id: row.countryId, value: row.value ?? null }));
+    newClueDraft.baselineSnapshot = serializeDraft();
+  }
 </script>
 
-  <div class="view-container" in:fly={{ x: direction === "back" ? -20 : 20, duration: 250, delay: 100 }} out:fly={{ x: direction === "back" ? 20 : -20, duration: 200 }}>
-  {#if discardPromptVisible || deletePromptVisible}
+<div class="view-container" in:fly={{ x: direction === "back" ? -20 : 20, duration: 250, delay: 100 }} out:fly={{ x: direction === "back" ? 20 : -20, duration: 200 }}>
+  {#if discardPromptVisible || deletePromptVisible || globalDeletePromptVisible}
     <div class="warning-view" in:fly={{ x: direction === "back" ? -20 : 20, duration: 250 }} out:fly={{ x: direction === "back" ? 20 : -20, duration: 200 }}>
       <div class="modal-header">
         <h2 class="warning-title">Warning</h2>
@@ -323,16 +403,20 @@
       <div class="warning-body">
         <div class="warning-icon"><TriangleAlert size={28} /></div>
         <p class="warning-text">
-          {#if deletePromptVisible}
-            Delete this custom clue and its dataset?
+          {#if globalDeletePromptVisible}
+            Delete this published clue globally? This removes the cloud version and your local copy.
+          {:else if deletePromptVisible}
+            Delete this custom clue and its local dataset from this browser?
           {:else}
             You have unsaved changes. Discard them?
           {/if}
         </p>
         <div class="warning-actions">
-          <button class="warning-btn muted" onclick={() => { discardPromptVisible = false; deletePromptVisible = false; }}>Keep Editing</button>
-          {#if deletePromptVisible}
-            <button class="warning-btn danger" onclick={handleDelete}>Delete</button>
+          <button class="warning-btn muted" onclick={() => { discardPromptVisible = false; deletePromptVisible = false; globalDeletePromptVisible = false; }}>Keep Editing</button>
+          {#if globalDeletePromptVisible}
+            <button class="warning-btn danger" onclick={handleDeleteGlobal}>Delete Globally</button>
+          {:else if deletePromptVisible}
+            <button class="warning-btn danger" onclick={() => handleDeleteLocal()}>Delete Locally</button>
           {:else}
             <button class="warning-btn danger" onclick={() => { restoreDraftFromBaseline(); onBack(); }}>Discard</button>
           {/if}
@@ -353,41 +437,46 @@
       </div>
     </div>
   {:else}
-  <div class="modal-header">
-    <button class="icon-btn back-btn" aria-label="Back" onclick={handleBack}><ArrowLeft /></button>
-    <h2 class="centered-title">Edit Custom Clue</h2>
-    <button class="icon-btn save-btn" class:is-ready={!isSaveDisabled} aria-label="Save" onclick={handleSave} disabled={isSaveDisabled}><CloudBackup /></button>
-  </div>
+    <div class="modal-header">
+      <button class="icon-btn back-btn" aria-label="Back" onclick={handleBack}><ArrowLeft /></button>
+      <h2 class="centered-title">Edit Custom Clue</h2>
+      <div class="header-actions">
+        <button class="icon-btn save-btn" class:is-ready={!isSaveDisabled} aria-label="Save" onclick={handleSave} disabled={isSaveDisabled}><Save /></button>
+      </div>
+    </div>
 
-  <div class="modal-body form-body">
-    {#if typeWarning}
-      <div class="inline-dialog warning"><TriangleAlert size={18} /><span>{typeWarning}</span><div class="dialog-actions"><button class="dialog-btn muted" onclick={() => { typeWarning = null; onNavigate("dataset-editor"); }}>Keep Editing</button><button class="dialog-btn accent" onclick={() => (typeWarning = null)}>Proceed</button></div></div>
-    {/if}
-
-    <div class="menu-actions">
-      {#if uploadedFileName}
-        <button class="action-btn" onclick={clearUploadedFile}><div class="action-icon danger"><X size={20} /></div><div class="action-text"><span>{uploadedFileName}</span><span class="muted">{newClueDraft.data.length} records · {uploadedFileSize}</span></div></button>
-      {:else}
-        <button class="action-btn" onclick={() => fileInput?.click()}><div class="action-icon accent"><Upload size={20} /></div><div class="action-text"><span>Import Data</span><span class="muted">CSV or JSON file</span></div></button>
+    <div class="modal-body form-body">
+      {#if typeWarning}
+        <div class="inline-dialog warning"><TriangleAlert size={18} /><span>{typeWarning}</span><div class="dialog-actions"><button class="dialog-btn muted" onclick={() => { typeWarning = null; onNavigate("dataset-editor"); }}>Keep Editing</button><button class="dialog-btn accent" onclick={() => (typeWarning = null)}>Proceed</button></div></div>
       {/if}
+
+      <div class="menu-actions">
+        {#if uploadedFileName}
+          <button class="action-btn" onclick={clearUploadedFile}><div class="action-icon danger"><X size={20} /></div><div class="action-text"><span>{uploadedFileName}</span><span class="muted">{newClueDraft.data.length} records · {uploadedFileSize}</span></div></button>
+        {:else}
+          <button class="action-btn" onclick={() => fileInput?.click()}><div class="action-icon accent"><Upload size={20} /></div><div class="action-text"><span>Import Data</span><span class="muted">CSV or JSON file</span></div></button>
+        {/if}
+      </div>
+
+      <input type="file" bind:this={fileInput} onchange={handleFileSelect} accept=".csv,text/csv,text/plain,.json,application/json" style="display:none;" />
+
+      <div class="form-group"><span class="fake-label">Dataset ID</span><div class="readonly-value">{newClueDraft.id}</div></div>
+      <div class="form-group"><label for="clue-label">Label</label><input id="clue-label" type="text" bind:value={newClueDraft.label} /></div>
+      <div class="form-group"><div class="field-header"><label for="clue-description">Description</label><span class="field-counter">{newClueDraft.description.length}/120</span></div><textarea id="clue-description" bind:value={newClueDraft.description} rows="2" maxlength="120" placeholder="Short explanation shown in clue details"></textarea></div>
+      <div class="form-group row"><div class="half"><span class="fake-label">Type</span><div class="readonly-value">{newClueDraft.type}</div></div><div class="half"><span class="fake-label">Comparator</span><div class="readonly-value">{newClueDraft.comparator}</div></div></div>
+      {#if newClueDraft.type === "numeric"}
+        <div class="form-group"><label for="clue-unit">Unit Symbol (Optional)</label><input id="clue-unit" type="text" bind:value={newClueDraft.unitSymbol} placeholder="e.g. $, %, km²" /></div>
+      {/if}
+
+      <div class="menu-actions">
+        <button class="action-btn" onclick={() => onNavigate("icon-picker")}><div class="action-icon"><ImageIcon size={18} /></div><div class="action-text"><span>Icon</span><span class="muted">{newClueDraft.icon}</span></div></button>
+        <button class="action-btn" onclick={() => onNavigate("dataset-editor")} disabled={newClueDraft.data.length === 0}><div class="action-icon"><Table2 size={18} /></div><div class="action-text"><span>View/Edit Data</span><span class="muted">{newClueDraft.data.length} records{#if missingDataCount > 0} · {missingDataCount} empty{/if}</span></div></button>
+        {#if cloudLink && canPushLink}
+          <button class="action-btn delete-action" onclick={() => (globalDeletePromptVisible = true)}><div class="action-icon danger"><Trash2 size={18} /></div><div class="action-text"><span>Delete Globally</span><span class="muted">Remove the cloud version and this local copy</span></div></button>
+        {/if}
+        <button class="action-btn delete-action" onclick={() => (deletePromptVisible = true)}><div class="action-icon danger"><Trash2 size={18} /></div><div class="action-text"><span>Delete Locally</span><span class="muted">Remove this browser copy only</span></div></button>
+      </div>
     </div>
-
-    <input type="file" bind:this={fileInput} onchange={handleFileSelect} accept=".csv,text/csv,text/plain,.json,application/json" style="display:none;" />
-
-    <div class="form-group"><span class="fake-label">Dataset ID</span><div class="readonly-value">{newClueDraft.id}</div></div>
-    <div class="form-group"><label for="clue-label">Label</label><input id="clue-label" type="text" bind:value={newClueDraft.label} /></div>
-    <div class="form-group"><div class="field-header"><label for="clue-description">Description</label><span class="field-counter">{newClueDraft.description.length}/120</span></div><textarea id="clue-description" bind:value={newClueDraft.description} rows="2" maxlength="120" placeholder="Short explanation shown in clue details"></textarea></div>
-    <div class="form-group row"><div class="half"><span class="fake-label">Type</span><div class="readonly-value">{newClueDraft.type}</div></div><div class="half"><span class="fake-label">Comparator</span><div class="readonly-value">{newClueDraft.comparator}</div></div></div>
-    {#if newClueDraft.type === "numeric"}
-      <div class="form-group"><label for="clue-unit">Unit Symbol (Optional)</label><input id="clue-unit" type="text" bind:value={newClueDraft.unitSymbol} placeholder="e.g. $, %, km²" /></div>
-    {/if}
-
-    <div class="menu-actions">
-      <button class="action-btn" onclick={() => onNavigate("icon-picker")}><div class="action-icon"><ImageIcon size={18} /></div><div class="action-text"><span>Icon</span><span class="muted">{newClueDraft.icon}</span></div></button>
-      <button class="action-btn" onclick={() => onNavigate("dataset-editor")} disabled={newClueDraft.data.length === 0}><div class="action-icon"><Table2 size={18} /></div><div class="action-text"><span>View/Edit Data</span><span class="muted">{newClueDraft.data.length} records{#if missingDataCount > 0} · {missingDataCount} empty{/if}</span></div></button>
-      <button class="action-btn delete-action" onclick={() => (deletePromptVisible = true)}><div class="action-icon danger"><Trash2 size={18} /></div><div class="action-text"><span>Delete Clue</span><span class="muted">Remove clue metadata and data</span></div></button>
-    </div>
-  </div>
   {/if}
 </div>
 
@@ -396,6 +485,7 @@
   .view-container::-webkit-scrollbar { display:none; }
   .modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; background:var(--panel); position:sticky; top:0; z-index:2; }
   .centered-title { position:absolute; left:50%; transform:translateX(-50%); font-size:18px; font-weight:500; margin:0; }
+  .header-actions { display:flex; gap:8px; }
   .icon-btn { width:40px; height:40px; border-radius:50%; border:none; background:transparent; color:var(--text); display:grid; place-items:center; cursor:pointer; transition:background .2s, box-shadow .2s, color .2s; outline:none; }
   @media (hover:hover) { .icon-btn:hover:not(:disabled) { background:var(--hover-strong); } }
   .icon-btn:active:not(:disabled) { background:var(--hover-strong); }
@@ -435,7 +525,6 @@
   textarea { background:var(--field-bg); border:1px solid var(--field-border); padding:12px; border-radius:8px; color:var(--text); font-size:15px; line-height:1.5; outline:none; resize:none; min-height:calc(1.5em * 2 + 24px); font-family:inherit; }
   textarea:focus { border-color:var(--info); }
   .readonly-value { background:var(--field-bg); border:1px solid var(--field-border); padding:12px; border-radius:8px; color:var(--muted); font-size:15px; text-transform:capitalize; }
-
   .warning-view { position:absolute; inset:0; display:flex; flex-direction:column; background:var(--panel); }
   .warning-title { margin:0 auto; font-size:18px; font-weight:500; }
   .warning-body { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; padding:24px; text-align:center; }
