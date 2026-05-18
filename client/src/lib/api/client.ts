@@ -111,6 +111,8 @@ export interface CountryDiscoveryStatDto {
 export interface ClueUsageStatDto {
   clueId: string
   usageCount: number
+  label: string
+  icon: string | null
 }
 
 export interface MyRankedStatsResult {
@@ -132,6 +134,71 @@ export async function getMyRankedStats(signal?: AbortSignal): Promise<MyRankedSt
 
 export async function resetMyRankedStats(xsrfToken: string, signal?: AbortSignal): Promise<void> {
   return apiRequest<void>(API_PATHS.ranked.statsMe, { method: 'DELETE', xsrfToken, signal })
+}
+
+export interface RankedCountryOptionDto {
+  countryId: string
+  name: string
+}
+
+export interface AdminRankedClueDto {
+  id: string
+  label: string
+  description: string
+  icon: string
+  type: 'numeric' | 'categorical' | 'computed'
+  comparator: 'higher_lower' | 'exact'
+  group: string | null
+  unitSymbol: string | null
+  source: 'builtin' | 'published'
+}
+
+export interface AdminRankedClueOptionDto extends AdminRankedClueDto {
+  remoteId: string | null
+  ownerUsername: string | null
+  categories: string[] | null
+}
+
+export interface AdminRankedChallengeEditorDto {
+  challengeDateUtc: string
+  scope: string
+  isPersisted: boolean
+  targetCountryId: string
+  targetCountryName: string
+  selectedClues: AdminRankedClueDto[]
+  countries: RankedCountryOptionDto[]
+  availableClues: AdminRankedClueOptionDto[]
+  canResetSessions: boolean
+  canDeleteSchedule: boolean
+  sessionsReset: boolean
+}
+
+export interface SaveAdminRankedChallengeBody {
+  targetCountryId: string
+  clueIds: string[]
+  resetSessions: boolean
+}
+
+export interface DeleteAdminRankedChallengeResult {
+  challengeDateUtc: string
+  deleted: boolean
+  sessionsReset: boolean
+}
+
+export async function getAdminRankedChallenge(date: string, signal?: AbortSignal): Promise<AdminRankedChallengeEditorDto> {
+  return apiRequest<AdminRankedChallengeEditorDto>(`${API_PATHS.ranked.challengeAdmin}/${date}`, { signal })
+}
+
+export async function saveAdminRankedChallenge(date: string, body: SaveAdminRankedChallengeBody, xsrfToken: string, signal?: AbortSignal): Promise<AdminRankedChallengeEditorDto> {
+  return apiRequest<AdminRankedChallengeEditorDto>(`${API_PATHS.ranked.challengeAdmin}/${date}`, { method: 'PUT', body, xsrfToken, signal })
+}
+
+export async function deleteAdminRankedChallenge(date: string, xsrfToken: string, signal?: AbortSignal): Promise<DeleteAdminRankedChallengeResult> {
+  return apiRequest<DeleteAdminRankedChallengeResult>(`${API_PATHS.ranked.challengeAdmin}/${date}`, { method: 'DELETE', xsrfToken, signal })
+}
+
+export async function resetRankedLeaderboard(xsrfToken: string, signal?: AbortSignal): Promise<void> {
+  return apiRequest<void>(API_PATHS.leaderboards.ranked, { method: 'DELETE', xsrfToken, signal })
 }
 
 export type CluePackVisibility = 'public' | 'private'
