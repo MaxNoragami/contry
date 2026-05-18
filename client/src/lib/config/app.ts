@@ -17,6 +17,7 @@ export const API_PATHS = {
   },
   ranked: {
     challengeCurrent: '/ranked/challenges/current',
+    challengeAdmin: '/ranked/challenges',
     sessionCurrent: '/ranked/sessions/current',
     sessionGiveUp: '/ranked/sessions/current/give-up',
     guesses: '/ranked/guesses',

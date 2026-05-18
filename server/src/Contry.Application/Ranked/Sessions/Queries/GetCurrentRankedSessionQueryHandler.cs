@@ -18,6 +18,8 @@ public sealed class GetCurrentRankedSessionQueryHandler(
     public async Task<CurrentRankedSessionResult> HandleAsync(GetCurrentRankedSessionQuery query, CancellationToken cancellationToken)
     {
         var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
+        var challenge = await _rankedStore.FindChallengeByDateAsync(today, cancellationToken);
+        challenge = await RankedChallengeIntegrity.ResetIfPublishedCluesMissingAsync(challenge, today, _rankedStore, cancellationToken);
         var session = await _rankedStore.FindSessionByUserAndDateAsync(query.UserId, today, includeGuesses: true, cancellationToken);
 
         if (session is null)

@@ -95,11 +95,17 @@ public sealed class CreateRankedGuessCommandHandlerTests
         public Task UpdateChallengeAsync(RankedChallenge challenge, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
+        public Task DeleteChallengeByDateAsync(DateOnly date, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
         public Task DeleteSessionsByDateAsync(DateOnly date, CancellationToken cancellationToken)
         {
             Sessions.RemoveAll(session => session.RankedChallenge.ChallengeDateUtc == date);
             return Task.CompletedTask;
         }
+
+        public Task DeleteSessionsByDateAndRebuildStatsAsync(DateOnly date, CancellationToken cancellationToken)
+            => DeleteSessionsByDateAsync(date, cancellationToken);
 
         public Task ClearAllRankedDataAsync(CancellationToken cancellationToken)
         {
@@ -172,6 +178,12 @@ public sealed class CreateRankedGuessCommandHandlerTests
 
         public Task<IReadOnlyList<RankedClueUsageStat>> GetClueUsageStatsAsync(Guid userId, CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<RankedClueUsageStat>>([]);
+
+        public Task<IReadOnlySet<Guid>> GetExistingCluePackIdsAsync(IReadOnlyCollection<Guid> cluePackIds, CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlySet<Guid>>(cluePackIds.ToHashSet());
+
+        public Task<IReadOnlyDictionary<string, PublishedCluePackStatMetadata>> GetPublishedCluePackStatMetadataByDatasetIdsAsync(IReadOnlyCollection<string> datasetIds, CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyDictionary<string, PublishedCluePackStatMetadata>>(new Dictionary<string, PublishedCluePackStatMetadata>(StringComparer.Ordinal));
     }
 
     private sealed class FakeRankedDatasetProvider : IRankedDatasetProvider
@@ -206,5 +218,11 @@ public sealed class CreateRankedGuessCommandHandlerTests
 
         public Task<RankedCountryRecord?> FindCountryAsync(string countryId, CancellationToken cancellationToken)
             => Task.FromResult(Countries.TryGetValue(countryId, out var country) ? country : null);
+
+        public Task<IReadOnlyList<RankedCountryRecord>> GetCountriesAsync(CancellationToken cancellationToken)
+            => Task.FromResult((IReadOnlyList<RankedCountryRecord>)Countries.Values.ToList());
+
+        public Task<IReadOnlyList<RankedClueDefinition>> GetBuiltinClueCatalogAsync(CancellationToken cancellationToken)
+            => Task.FromResult(Clues);
     }
 }

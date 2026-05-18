@@ -2,6 +2,8 @@ using Contry.Domain.Ranked;
 
 namespace Contry.Application.Ranked;
 
+public sealed record PublishedCluePackStatMetadata(string DatasetId, string Label, string Icon);
+
 public interface IRankedStore
 {
     Task<RankedChallenge?> FindChallengeByDateAsync(DateOnly challengeDateUtc, CancellationToken cancellationToken);
@@ -10,7 +12,11 @@ public interface IRankedStore
 
     Task UpdateChallengeAsync(RankedChallenge challenge, CancellationToken cancellationToken);
 
+    Task DeleteChallengeByDateAsync(DateOnly date, CancellationToken cancellationToken);
+
     Task DeleteSessionsByDateAsync(DateOnly date, CancellationToken cancellationToken);
+
+    Task DeleteSessionsByDateAndRebuildStatsAsync(DateOnly date, CancellationToken cancellationToken);
 
     Task ClearAllRankedDataAsync(CancellationToken cancellationToken);
 
@@ -47,4 +53,8 @@ public interface IRankedStore
     Task<IReadOnlyList<RankedCountryDiscoveryStat>> GetCountryDiscoveryStatsAsync(Guid userId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<RankedClueUsageStat>> GetClueUsageStatsAsync(Guid userId, CancellationToken cancellationToken);
+
+    Task<IReadOnlySet<Guid>> GetExistingCluePackIdsAsync(IReadOnlyCollection<Guid> cluePackIds, CancellationToken cancellationToken);
+
+    Task<IReadOnlyDictionary<string, PublishedCluePackStatMetadata>> GetPublishedCluePackStatMetadataByDatasetIdsAsync(IReadOnlyCollection<string> datasetIds, CancellationToken cancellationToken);
 }

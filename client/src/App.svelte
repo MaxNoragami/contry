@@ -90,8 +90,10 @@
 
   $effect(() => {
     if (previousAuthState && !auth.isAuthenticated && auth.lastLogoutReason === 'expired') {
+      settingsOpen = false
+      helpOpen = false
       profileOpen = true;
-      pendingRankedPrompt = true;
+      pendingRankedPrompt = mode.current === 'ranked';
     }
 
     previousAuthState = auth.isAuthenticated;

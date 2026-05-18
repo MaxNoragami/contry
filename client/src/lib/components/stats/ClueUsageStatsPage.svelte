@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { ArrowLeft } from 'lucide-svelte'
+  import { ArrowLeft, CircleDot } from 'lucide-svelte'
   import { fly } from 'svelte/transition'
-  import { API_PATHS, getLucideIconUrl } from '../../config/app'
+  import { API_PATHS } from '../../config/app'
   import { type ClueUsageStatDto, type MyRankedStatsResult } from '../../api/client'
   import type { createAuthStore } from '../../stores/auth.svelte'
   import { iconMap } from '../../stores/game.svelte'
@@ -62,12 +62,11 @@
     return apiStats.clueUsageStats
       .map((stat: ClueUsageStatDto) => {
         const info = clueDisplayInfo[stat.clueId]
-        const iconKey = info?.icon ?? stat.clueId
+        const iconKey = stat.icon ?? info?.icon
         return {
           id: stat.clueId,
-          label: info?.label ?? stat.clueId,
-          icon: iconMap[iconKey] ?? null,
-          customIcon: !iconMap[iconKey] ? iconKey : undefined,
+          label: stat.label || info?.label || toTitleLabel(stat.clueId),
+          icon: iconKey ? (iconMap[iconKey] ?? CircleDot) : CircleDot,
           usage_count: stat.usageCount,
         }
       })
@@ -75,6 +74,14 @@
         if (b.usage_count !== a.usage_count) return b.usage_count - a.usage_count
         return a.label.localeCompare(b.label)
       })
+  }
+
+  function toTitleLabel(clueId: string): string {
+    return clueId
+      .split(/[_-]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ')
   }
 
   function maxUsage() {
@@ -104,8 +111,6 @@
                 {#if clue.icon}
                   {@const IconComponent = clue.icon}
                   <IconComponent size={20} />
-                {:else if clue.customIcon}
-                  <div class="custom-icon" style={`mask-image: url('${getLucideIconUrl(clue.customIcon)}'); -webkit-mask-image: url('${getLucideIconUrl(clue.customIcon)}');`}></div>
                 {/if}
               </div>
               <div class="clue-name">{clue.label}</div>
@@ -146,7 +151,6 @@
   .clue-leading { display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center; }
   .clue-icon-wrapper { width:40px; height:40px; border-radius:50%; background:var(--chip-bg); color:var(--chip-fg); display:grid; place-items:center; }
   .clue-name { font-size:13px; font-weight:600; line-height:1.2; }
-  .custom-icon { width:20px; height:20px; background-color:currentColor; mask-size:contain; mask-repeat:no-repeat; mask-position:center; -webkit-mask-size:contain; -webkit-mask-repeat:no-repeat; -webkit-mask-position:center; }
   .clue-bar-wrap { min-height:24px; display:flex; align-items:center; }
   .clue-bar { min-height:24px; min-width:28px; border-radius:999px; background:var(--info); display:flex; align-items:center; justify-content:flex-end; padding:0 8px; }
   .clue-bar--empty { background:var(--ring-track); }

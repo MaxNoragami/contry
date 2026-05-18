@@ -25,10 +25,9 @@ public sealed class CreateRankedGuessCommandHandler(
         var normalizedCountryId = command.CountryId.Trim().ToUpperInvariant();
 
         var challengeDefinition = await _rankedDatasetProvider.GetChallengeDefinitionAsync(today, cancellationToken);
-        var guessedCountry = await _rankedDatasetProvider.FindCountryAsync(normalizedCountryId, cancellationToken)
-            ?? throw new RankedInvalidCountryException();
 
         var challenge = await _rankedStore.FindChallengeByDateAsync(today, cancellationToken);
+        challenge = await RankedChallengeIntegrity.ResetIfPublishedCluesMissingAsync(challenge, today, _rankedStore, cancellationToken);
         if (challenge is null)
         {
             challenge = new RankedChallenge
@@ -36,15 +35,22 @@ public sealed class CreateRankedGuessCommandHandler(
                 Id = Guid.NewGuid(),
                 ChallengeDateUtc = today,
                 TargetCountryId = challengeDefinition.TargetCountryId,
-                ClueSetJson = JsonSerializer.Serialize(challengeDefinition.Clues, JsonSerializerOptions),
-                CreatedAtUtc = now
+                ClueSetJson = RankedChallengeSerialization.SerializeClues(challengeDefinition.Clues),
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now
             };
 
             await _rankedStore.AddChallengeAsync(challenge, cancellationToken);
         }
 
+        var customClueData = RankedChallengeSerialization.DeserializeCustomClueData(challenge.CustomClueDataJson);
+        var guessedCountry = await _rankedDatasetProvider.FindCountryAsync(normalizedCountryId, cancellationToken)
+            ?? throw new RankedInvalidCountryException();
+        guessedCountry = RankedChallengeSerialization.ApplyCustomClueData(guessedCountry, customClueData);
+
         var targetCountry = await _rankedDatasetProvider.FindCountryAsync(challenge.TargetCountryId, cancellationToken)
             ?? throw new RankedInvalidCountryException();
+        targetCountry = RankedChallengeSerialization.ApplyCustomClueData(targetCountry, customClueData);
 
         var session = await _rankedStore.FindSessionByUserAndDateAsync(command.UserId, today, includeGuesses: true, cancellationToken);
         if (session is null)
@@ -73,7 +79,7 @@ public sealed class CreateRankedGuessCommandHandler(
             throw new RankedDuplicateGuessException();
         }
 
-        var clueSnapshot = DeserializeClues(challenge.ClueSetJson);
+        var clueSnapshot = RankedChallengeSerialization.DeserializeClues(challenge.ClueSetJson);
         var evaluatedResults = _rankedGuessEvaluator.Evaluate(guessedCountry, targetCountry, clueSnapshot, today);
 
         var guess = new RankedGuess
@@ -205,10 +211,6 @@ public sealed class CreateRankedGuessCommandHandler(
             }
         }
     }
-
-    private static IReadOnlyList<RankedClueDefinition> DeserializeClues(string json)
-        => JsonSerializer.Deserialize<List<RankedClueDefinition>>(json, JsonSerializerOptions) ?? [];
-
     private static RankedGuessRecordResult DeserializeGuess(RankedGuess guess)
         => new(
             guess.AttemptNumber,

@@ -27,6 +27,7 @@ public sealed class GiveUpCurrentRankedSessionCommandHandler(
         var today = DateOnly.FromDateTime(now.UtcDateTime);
 
         var challenge = await _rankedStore.FindChallengeByDateAsync(today, cancellationToken);
+        challenge = await RankedChallengeIntegrity.ResetIfPublishedCluesMissingAsync(challenge, today, _rankedStore, cancellationToken);
         if (challenge is null)
         {
             var challengeDefinition = await _rankedDatasetProvider.GetChallengeDefinitionAsync(today, cancellationToken);
@@ -35,8 +36,9 @@ public sealed class GiveUpCurrentRankedSessionCommandHandler(
                 Id = Guid.NewGuid(),
                 ChallengeDateUtc = today,
                 TargetCountryId = challengeDefinition.TargetCountryId,
-                ClueSetJson = JsonSerializer.Serialize(challengeDefinition.Clues, JsonSerializerOptions),
-                CreatedAtUtc = now
+                ClueSetJson = RankedChallengeSerialization.SerializeClues(challengeDefinition.Clues),
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now
             };
 
             await _rankedStore.AddChallengeAsync(challenge, cancellationToken);

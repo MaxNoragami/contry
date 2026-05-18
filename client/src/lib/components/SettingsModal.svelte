@@ -1,6 +1,8 @@
 <script lang="ts">
-  import { CircleDot, MonitorCog, Trash2, X } from "lucide-svelte";
+  import { CircleDot, MonitorCog, Shield, Trophy, Trash2, X } from "lucide-svelte";
   import { fade, fly } from "svelte/transition";
+  import AdminPanelSettings from "./settings/AdminPanelSettings.svelte";
+  import AdminRankedRoundSettings from "./settings/AdminRankedRoundSettings.svelte";
   import CluesSettings from "./settings/CluesSettings.svelte";
   import AddClueSettings from "./settings/AddClueSettings.svelte";
   import EditClueSettings from "./settings/EditClueSettings.svelte";
@@ -10,6 +12,7 @@
 import DatasetEditorSettings from "./settings/DatasetEditorSettings.svelte";
 import { APP_TIMINGS } from "../config/app";
 import { DEFAULT_CLUE_IDS } from "../config/app";
+import { API_PATHS } from "../config/app";
 import { getCluePack } from "../api/client";
 import { canPushCloudLink, getCloudDetailFetcher, importPublishedClueToLocal, syncWorkspaceLinkedClues } from "../clues/cloud";
 import { loadWorkspaceCloudLinks, loadWorkspaceCustomClues, loadWorkspaceCustomRows, removeWorkspaceCustomRowsForClue, saveWorkspaceCloudLinks, saveWorkspaceCustomClues, saveWorkspaceSelectedClues } from "../clues/workspace";
@@ -47,6 +50,7 @@ import { toastStore } from "../stores/toasts.svelte";
   let editDiscardPromptVisible = $state(false);
   let currentThemeMode = $state<ThemeMode>(getThemeModeSync());
   let clearingCache = $state(false);
+  let resettingLeaderboard = $state(false);
 
   let newClueDraft = $state<DraftClueData>({
     mode: "create",
@@ -273,11 +277,35 @@ import { toastStore } from "../stores/toasts.svelte";
     view = "clear-cache-warning";
   }
 
+  function openAdminPanel() {
+    navDirection = 'forward'
+    view = 'admin-panel'
+  }
+
+  function openResetLeaderboardWarning() {
+    navDirection = 'forward'
+    view = 'admin-reset-leaderboard-warning'
+  }
+
   async function confirmClearCache() {
     if (clearingCache) return;
     clearingCache = true;
     await clearAllCachedData();
     window.location.reload();
+  }
+
+  async function confirmResetLeaderboard() {
+    if (resettingLeaderboard) return
+    resettingLeaderboard = true
+    try {
+      await auth.request<void>(API_PATHS.leaderboards.ranked, { method: 'DELETE' })
+      toastStore.push('Ranked leaderboard reset.', 'success')
+      window.history.back()
+    } catch (error) {
+      toastStore.push('Failed to reset leaderboard. Please try again.')
+    } finally {
+      resettingLeaderboard = false
+    }
   }
 
   function goBack() {
@@ -368,13 +396,13 @@ import { toastStore } from "../stores/toasts.svelte";
           </div>
           <div class="modal-body">
             <div class="settings-list menu-actions">
-              <button class="settings-item" onclick={openClues} disabled={mode === 'ranked' && auth.user?.role !== 'ADMIN'}>
+              <button class="settings-item" onclick={openClues} disabled={mode === 'ranked'}>
                 <div class="settings-item-icon">
                   <CircleDot />
                 </div>
                 <div class="settings-item-text">
                   <span>Clues</span>
-                  <span class="muted">{mode === 'ranked' && auth.user?.role !== 'ADMIN' ? 'Available in arcade or for admins' : 'Customize game clues'}</span>
+                  <span class="muted">{mode === 'ranked' ? 'Unavailable in ranked mode' : 'Customize game clues'}</span>
                 </div>
               </button>
               <button class="settings-item" onclick={cycleTheme}>
@@ -386,6 +414,17 @@ import { toastStore } from "../stores/toasts.svelte";
                   <span class="muted">{getThemeModeLabel(currentThemeMode)}</span>
                 </div>
               </button>
+              {#if auth.isAuthenticated && auth.user?.role === 'ADMIN'}
+                <button class="settings-item" onclick={openAdminPanel}>
+                  <div class="settings-item-icon">
+                    <Shield />
+                  </div>
+                  <div class="settings-item-text">
+                    <span>Admin Panel</span>
+                    <span class="muted">Manage ranked rounds and admin actions</span>
+                  </div>
+                </button>
+              {/if}
               <button class="settings-item settings-item-danger" onclick={openClearCacheWarning}>
                 <div class="settings-item-icon settings-item-icon-danger">
                   <Trash2 />
@@ -423,6 +462,37 @@ import { toastStore } from "../stores/toasts.svelte";
               <button class="warning-btn muted" onclick={goBack} disabled={clearingCache}>Discard</button>
               <button class="warning-btn danger" onclick={confirmClearCache} disabled={clearingCache}>
                 {clearingCache ? "Clearing..." : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      {/if}
+
+      {#if view === "admin-panel"}
+        <AdminPanelSettings onBack={goBack} onNavigate={navigateTo} direction={navDirection} />
+      {/if}
+
+      {#if view === "admin-ranked-round"}
+        <AdminRankedRoundSettings {auth} onBack={goBack} direction={navDirection} />
+      {/if}
+
+      {#if view === 'admin-reset-leaderboard-warning'}
+        <div class="view-container warning-view" in:fly={{ x: 20, duration: 250, delay: 100 }} out:fly={{ x: 20, duration: 200 }}>
+          <div class="modal-header">
+            <h2>Reset leaderboard</h2>
+            <button class="icon-btn" aria-label="Close" onclick={close} disabled={resettingLeaderboard}><X /></button>
+          </div>
+          <div class="warning-body">
+            <div class="warning-icon">
+              <Trophy size={20} />
+            </div>
+            <p class="warning-text">
+              This will delete ranked sessions, clue usage, discovery progress, and leaderboard stats for all players.
+            </p>
+            <div class="warning-actions">
+              <button class="warning-btn muted" onclick={goBack} disabled={resettingLeaderboard}>Keep leaderboard</button>
+              <button class="warning-btn danger" onclick={confirmResetLeaderboard} disabled={resettingLeaderboard}>
+                {resettingLeaderboard ? 'Resetting...' : 'Reset'}
               </button>
             </div>
           </div>

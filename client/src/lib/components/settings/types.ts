@@ -1,4 +1,4 @@
-export type ViewType = 'main' | 'clues' | 'add-clue' | 'edit-clue' | 'view-clue' | 'explore-clues' | 'icon-picker' | 'dataset-editor' | 'clear-cache-warning';
+export type ViewType = 'main' | 'clues' | 'add-clue' | 'edit-clue' | 'view-clue' | 'explore-clues' | 'icon-picker' | 'dataset-editor' | 'admin-panel' | 'admin-ranked-round' | 'admin-reset-leaderboard-warning' | 'clear-cache-warning';
 
 export type NavDirection = 'forward' | 'back';
 

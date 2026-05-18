@@ -111,7 +111,6 @@ export function createAuthStore() {
       return await fetchXsrfToken()
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
-        clearSessionState('expired')
         return null
       }
       throw error
