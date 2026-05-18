@@ -54,18 +54,6 @@ public static class CluePackEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .Produces(StatusCodes.Status404NotFound);
 
-        cluePacks.MapPatch("/{id:guid}", PatchCluePackAsync)
-            .WithValidation<PatchCluePackRequest>()
-            .RequireAuthorization()
-            .RequireXsrf()
-            .WithName("PatchCluePack")
-            .WithSummary("Partially update a clue pack.")
-            .Produces<CluePackDetailResponse>()
-            .ProducesValidationProblem()
-            .Produces(StatusCodes.Status401Unauthorized)
-            .ProducesProblem(StatusCodes.Status403Forbidden)
-            .Produces(StatusCodes.Status404NotFound);
-
         cluePacks.MapDelete("/{id:guid}", DeleteCluePackAsync)
             .RequireAuthorization()
             .RequireXsrf()
@@ -276,56 +264,6 @@ public static class CluePackEndpoints
         return TypedResults.Ok(ToDetail(entry.Pack, entry.Owner.Username, identity));
     }
 
-    private static async Task<IResult> PatchCluePackAsync(
-        Guid id,
-        PatchCluePackRequest request,
-        HttpContext httpContext,
-        ContryDbContext dbContext,
-        TimeProvider timeProvider,
-        CancellationToken cancellationToken)
-    {
-        var identity = RequireIdentity(httpContext);
-        var entry = await dbContext.CluePacks
-            .Join(dbContext.Users, pack => pack.OwnerId, user => user.Id, (pack, user) => new { Pack = pack, Owner = user })
-            .SingleOrDefaultAsync(item => item.Pack.Id == id, cancellationToken);
-
-        if (entry is null)
-        {
-            return TypedResults.NotFound();
-        }
-
-        EnsureCanWrite(entry.Pack, identity);
-
-        if (request.DatasetId is not null)
-        {
-            var normalizedDatasetId = request.DatasetId.Trim();
-            var collision = await dbContext.CluePacks.AnyAsync(
-                pack => pack.Id != id && pack.OwnerId == entry.Pack.OwnerId && pack.DatasetId == normalizedDatasetId,
-                cancellationToken);
-
-            if (collision)
-            {
-                throw new CluePackConflictException("The clue pack owner already has another clue pack with this dataset id.");
-            }
-
-            entry.Pack.DatasetId = normalizedDatasetId;
-        }
-
-        if (request.Label is not null) entry.Pack.Label = request.Label.Trim();
-        if (request.Description is not null) entry.Pack.Description = request.Description.Trim();
-        if (request.Type is not null) entry.Pack.Type = request.Type;
-        if (request.Comparator is not null) entry.Pack.Comparator = request.Comparator;
-        if (request.UnitSymbol is not null) entry.Pack.UnitSymbol = NormalizeUnitSymbol(request.UnitSymbol);
-        if (request.Icon is not null) entry.Pack.Icon = request.Icon.Trim();
-        if (request.Categories is not null) entry.Pack.CategoriesJson = SerializeCategories(request.Categories);
-        if (request.Rows is not null) entry.Pack.RowsJson = SerializeRows(request.Rows);
-        if (request.Visibility is not null) entry.Pack.Visibility = NormalizeVisibility(request.Visibility) ?? entry.Pack.Visibility;
-        entry.Pack.UpdatedAtUtc = timeProvider.GetUtcNow();
-
-        await dbContext.SaveChangesAsync(cancellationToken);
-        return TypedResults.Ok(ToDetail(entry.Pack, entry.Owner.Username, identity));
-    }
-
     private static async Task<IResult> DeleteCluePackAsync(
         Guid id,
         HttpContext httpContext,
@@ -482,18 +420,6 @@ public sealed record UpsertCluePackRequest(
     IReadOnlyList<CluePackRowRequest> Rows,
     string? Visibility);
 
-public sealed record PatchCluePackRequest(
-    string? DatasetId,
-    string? Label,
-    string? Description,
-    string? Type,
-    string? Comparator,
-    string? UnitSymbol,
-    string? Icon,
-    IReadOnlyList<string>? Categories,
-    IReadOnlyList<CluePackRowRequest>? Rows,
-    string? Visibility);
-
 public sealed class UpsertCluePackRequestValidator : AbstractValidator<UpsertCluePackRequest>
 {
     public UpsertCluePackRequestValidator()
@@ -508,22 +434,6 @@ public sealed class UpsertCluePackRequestValidator : AbstractValidator<UpsertClu
         RuleFor(request => request.Visibility).Must(value => value is null or "public" or "private");
         RuleFor(request => request.Rows).NotEmpty();
         RuleForEach(request => request.Rows).SetValidator(new CluePackRowRequestValidator());
-    }
-}
-
-public sealed class PatchCluePackRequestValidator : AbstractValidator<PatchCluePackRequest>
-{
-    public PatchCluePackRequestValidator()
-    {
-        When(request => request.DatasetId is not null, () => RuleFor(request => request.DatasetId!).NotEmpty().MaximumLength(96));
-        When(request => request.Label is not null, () => RuleFor(request => request.Label!).NotEmpty().MaximumLength(120));
-        When(request => request.Description is not null, () => RuleFor(request => request.Description!).NotEmpty().MaximumLength(120));
-        When(request => request.Type is not null, () => RuleFor(request => request.Type!).Must(value => value is "numeric" or "categorical"));
-        When(request => request.Comparator is not null, () => RuleFor(request => request.Comparator!).Must(value => value is "higher_lower" or "exact"));
-        When(request => request.Icon is not null, () => RuleFor(request => request.Icon!).NotEmpty().MaximumLength(64));
-        When(request => request.UnitSymbol is not null, () => RuleFor(request => request.UnitSymbol!).MaximumLength(32));
-        When(request => request.Visibility is not null, () => RuleFor(request => request.Visibility!).Must(value => value is "public" or "private"));
-        When(request => request.Rows is not null, () => RuleForEach(request => request.Rows!).SetValidator(new CluePackRowRequestValidator()));
     }
 }
 
