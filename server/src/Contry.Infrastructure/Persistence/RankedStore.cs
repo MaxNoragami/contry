@@ -1,4 +1,6 @@
 using Contry.Application.Ranked;
+using Contry.Application.Ranked.Models;
+using Contry.Domain.Clues;
 using Contry.Domain.Ranked;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,6 +25,13 @@ public sealed class RankedStore(ContryDbContext dbContext) : IRankedStore
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task DeleteChallengeByDateAsync(DateOnly date, CancellationToken cancellationToken)
+    {
+        await _dbContext.RankedChallenges
+            .Where(challenge => challenge.ChallengeDateUtc == date)
+            .ExecuteDeleteAsync(cancellationToken);
+    }
+
     public async Task DeleteSessionsByDateAsync(DateOnly date, CancellationToken cancellationToken)
     {
         var sessionIds = _dbContext.RankedSessions
@@ -36,6 +45,12 @@ public sealed class RankedStore(ContryDbContext dbContext) : IRankedStore
         await _dbContext.RankedSessions
             .Where(session => session.RankedChallenge.ChallengeDateUtc == date)
             .ExecuteDeleteAsync(cancellationToken);
+    }
+
+    public async Task DeleteSessionsByDateAndRebuildStatsAsync(DateOnly date, CancellationToken cancellationToken)
+    {
+        await DeleteSessionsByDateAsync(date, cancellationToken);
+        await RebuildAggregatesAsync(cancellationToken);
     }
 
     public async Task ClearAllRankedDataAsync(CancellationToken cancellationToken)
@@ -163,4 +178,149 @@ public sealed class RankedStore(ContryDbContext dbContext) : IRankedStore
 
     public async Task<IReadOnlyList<RankedClueUsageStat>> GetClueUsageStatsAsync(Guid userId, CancellationToken cancellationToken)
         => await _dbContext.RankedClueUsageStats.Where(stat => stat.UserId == userId).ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlySet<Guid>> GetExistingCluePackIdsAsync(IReadOnlyCollection<Guid> cluePackIds, CancellationToken cancellationToken)
+    {
+        if (cluePackIds.Count == 0)
+        {
+            return new HashSet<Guid>();
+        }
+
+        var ids = await _dbContext.CluePacks
+            .Where(pack => cluePackIds.Contains(pack.Id))
+            .Select(pack => pack.Id)
+            .ToListAsync(cancellationToken);
+
+        return ids.ToHashSet();
+    }
+
+    public async Task<IReadOnlyDictionary<string, PublishedCluePackStatMetadata>> GetPublishedCluePackStatMetadataByDatasetIdsAsync(IReadOnlyCollection<string> datasetIds, CancellationToken cancellationToken)
+    {
+        if (datasetIds.Count == 0)
+        {
+            return new Dictionary<string, PublishedCluePackStatMetadata>(StringComparer.Ordinal);
+        }
+
+        var items = await _dbContext.CluePacks
+            .Where(pack => datasetIds.Contains(pack.DatasetId))
+            .Select(pack => new PublishedCluePackStatMetadata(pack.DatasetId, pack.Label, pack.Icon))
+            .ToListAsync(cancellationToken);
+
+        return items.ToDictionary(item => item.DatasetId, item => item, StringComparer.Ordinal);
+    }
+
+    private async Task RebuildAggregatesAsync(CancellationToken cancellationToken)
+    {
+        await _dbContext.RankedClueUsageStats.ExecuteDeleteAsync(cancellationToken);
+        await _dbContext.RankedCountryDiscoveryStats.ExecuteDeleteAsync(cancellationToken);
+        await _dbContext.RankedUserStats.ExecuteDeleteAsync(cancellationToken);
+
+        var sessions = await _dbContext.RankedSessions
+            .Include(session => session.RankedChallenge)
+            .Include(session => session.Guesses)
+            .Where(session => session.Status == RankedSessionStatus.Won || session.Status == RankedSessionStatus.Lost)
+            .OrderBy(session => session.UserId)
+            .ThenBy(session => session.RankedChallenge.ChallengeDateUtc)
+            .ThenBy(session => session.CompletedAtUtc)
+            .ToListAsync(cancellationToken);
+
+        var statsByUser = new Dictionary<Guid, RankedUserStats>();
+        var clueUsage = new Dictionary<(Guid UserId, string ClueId), RankedClueUsageStat>();
+        var discovery = new Dictionary<(Guid UserId, string CountryId), RankedCountryDiscoveryStat>();
+
+        foreach (var userSessions in sessions.GroupBy(session => session.UserId))
+        {
+            var distribution = new Dictionary<string, int>(StringComparer.Ordinal);
+            var currentStreak = 0;
+            var bestStreak = 0;
+            DateOnly? lastWonDate = null;
+            DateOnly? lastCompletedDate = null;
+            var stats = new RankedUserStats { UserId = userSessions.Key };
+
+            foreach (var session in userSessions)
+            {
+                stats.PlayedCount += 1;
+                lastCompletedDate = session.RankedChallenge.ChallengeDateUtc;
+
+                if (session.Status == RankedSessionStatus.Won)
+                {
+                    stats.WonCount += 1;
+                    stats.TotalGuessesOnWins += session.GuessCount;
+                    stats.FastestWinGuessCount = stats.FastestWinGuessCount is null ? session.GuessCount : Math.Min(stats.FastestWinGuessCount.Value, session.GuessCount);
+                    stats.SlowestWinGuessCount = stats.SlowestWinGuessCount is null ? session.GuessCount : Math.Max(stats.SlowestWinGuessCount.Value, session.GuessCount);
+
+                    var bucket = session.GuessCount.ToString();
+                    distribution[bucket] = distribution.TryGetValue(bucket, out var count) ? count + 1 : 1;
+
+                    currentStreak = lastWonDate is not null && lastWonDate.Value.AddDays(1) == session.RankedChallenge.ChallengeDateUtc
+                        ? currentStreak + 1
+                        : 1;
+                    bestStreak = Math.Max(bestStreak, currentStreak);
+                    lastWonDate = session.RankedChallenge.ChallengeDateUtc;
+
+                    var discoveryKey = (session.UserId, session.RankedChallenge.TargetCountryId);
+                    if (!discovery.TryGetValue(discoveryKey, out var discoveryStat))
+                    {
+                        discoveryStat = new RankedCountryDiscoveryStat
+                        {
+                            UserId = session.UserId,
+                            CountryId = session.RankedChallenge.TargetCountryId,
+                            Discovered = true,
+                            SolvedCount = 0
+                        };
+                        discovery[discoveryKey] = discoveryStat;
+                    }
+
+                    discoveryStat.SolvedCount += 1;
+                    discoveryStat.BestAttempts = discoveryStat.BestAttempts is null ? session.GuessCount : Math.Min(discoveryStat.BestAttempts.Value, session.GuessCount);
+                    discoveryStat.LastSolvedAtUtc = session.CompletedAtUtc;
+
+                    foreach (var clue in RankedChallengeSerialization.DeserializeClues(session.RankedChallenge.ClueSetJson))
+                    {
+                        var clueKey = (session.UserId, clue.Id);
+                        if (!clueUsage.TryGetValue(clueKey, out var clueStat))
+                        {
+                            clueStat = new RankedClueUsageStat
+                            {
+                                UserId = session.UserId,
+                                ClueId = clue.Id,
+                                UsageCount = 0,
+                            };
+                            clueUsage[clueKey] = clueStat;
+                        }
+
+                        clueStat.UsageCount += 1;
+                    }
+                }
+                else
+                {
+                    distribution["DNF"] = distribution.TryGetValue("DNF", out var count) ? count + 1 : 1;
+                    currentStreak = 0;
+                }
+            }
+
+            stats.CurrentStreak = currentStreak;
+            stats.BestStreak = bestStreak;
+            stats.LastCompletedChallengeDateUtc = lastCompletedDate;
+            stats.GuessDistributionJson = System.Text.Json.JsonSerializer.Serialize(distribution);
+            statsByUser[userSessions.Key] = stats;
+        }
+
+        if (statsByUser.Count > 0)
+        {
+            _dbContext.RankedUserStats.AddRange(statsByUser.Values);
+        }
+
+        if (discovery.Count > 0)
+        {
+            _dbContext.RankedCountryDiscoveryStats.AddRange(discovery.Values);
+        }
+
+        if (clueUsage.Count > 0)
+        {
+            _dbContext.RankedClueUsageStats.AddRange(clueUsage.Values);
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
 }

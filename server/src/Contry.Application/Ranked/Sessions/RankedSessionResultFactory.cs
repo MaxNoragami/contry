@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Contry.Application.Ranked;
 using Contry.Application.Ranked.Models;
 using Contry.Domain.Ranked;
@@ -7,8 +6,6 @@ namespace Contry.Application.Ranked.Sessions;
 
 internal static class RankedSessionResultFactory
 {
-    private static readonly JsonSerializerOptions JsonSerializerOptions = new(JsonSerializerDefaults.Web);
-
     public static CurrentRankedSessionResult CreateNotStarted(DateOnly challengeDateUtc)
         => new(challengeDateUtc, "not_started", 0, null, []);
 
@@ -25,9 +22,11 @@ internal static class RankedSessionResultFactory
 
         if (session.Status == RankedSessionStatus.Lost)
         {
-            var clues = DeserializeClues(session.RankedChallenge.ClueSetJson);
+            var clues = RankedChallengeSerialization.DeserializeClues(session.RankedChallenge.ClueSetJson);
+            var customClueData = RankedChallengeSerialization.DeserializeCustomClueData(session.RankedChallenge.CustomClueDataJson);
             var targetCountry = await rankedDatasetProvider.FindCountryAsync(session.RankedChallenge.TargetCountryId, cancellationToken)
                 ?? throw new RankedInvalidCountryException();
+            targetCountry = RankedChallengeSerialization.ApplyCustomClueData(targetCountry, customClueData);
 
             guesses.Add(new RankedGuessRecordResult(
                 session.GuessCount + 1,
@@ -44,16 +43,12 @@ internal static class RankedSessionResultFactory
             session.CompletedAtUtc,
             guesses);
     }
-
-    private static IReadOnlyList<RankedClueDefinition> DeserializeClues(string json)
-        => JsonSerializer.Deserialize<List<RankedClueDefinition>>(json, JsonSerializerOptions) ?? [];
-
     private static RankedGuessRecordResult DeserializeGuess(RankedGuess guess)
         => new(
             guess.AttemptNumber,
             guess.GuessCountryId,
             guess.GuessCountryName,
-            JsonSerializer.Deserialize<List<RankedClueResult>>(guess.ResultsJson, JsonSerializerOptions) ?? [],
+            System.Text.Json.JsonSerializer.Deserialize<List<RankedClueResult>>(guess.ResultsJson, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)) ?? [],
             guess.CreatedAtUtc);
 
     private static string ToApiStatus(RankedSessionStatus status)

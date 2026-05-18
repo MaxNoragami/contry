@@ -11,8 +11,6 @@ namespace Contry.Infrastructure.Ranked;
 public sealed class FileRankedDatasetProvider(BuiltInDatasetCatalog builtInDatasetCatalog) : IRankedDatasetProvider
 {
     private static readonly JsonSerializerOptions JsonSerializerOptions = new(JsonSerializerDefaults.Web);
-    private static readonly string[] DefaultClueIds = ["hemisphere", "continent", "temperature_avg_c", "population", "coordinates"];
-
     private readonly BuiltInDatasetCatalog _builtInDatasetCatalog = builtInDatasetCatalog;
     private readonly Lock _loadLock = new();
     private DatasetCache? _cache;
@@ -21,7 +19,8 @@ public sealed class FileRankedDatasetProvider(BuiltInDatasetCatalog builtInDatas
     {
         var cache = GetOrLoadCache();
         var target = SelectTargetCountry(cache.Countries, challengeDateUtc);
-        return Task.FromResult(new RankedChallengeDefinition(challengeDateUtc, target.CountryId, cache.Clues));
+        var clues = SelectBuiltinClues(cache.Clues, challengeDateUtc);
+        return Task.FromResult(new RankedChallengeDefinition(challengeDateUtc, target.CountryId, clues));
     }
 
     public Task<RankedCountryRecord?> FindCountryAsync(string countryId, CancellationToken cancellationToken)
@@ -29,6 +28,18 @@ public sealed class FileRankedDatasetProvider(BuiltInDatasetCatalog builtInDatas
         var cache = GetOrLoadCache();
         cache.CountriesById.TryGetValue(countryId.Trim().ToUpperInvariant(), out var country);
         return Task.FromResult(country);
+    }
+
+    public Task<IReadOnlyList<RankedCountryRecord>> GetCountriesAsync(CancellationToken cancellationToken)
+    {
+        var cache = GetOrLoadCache();
+        return Task.FromResult((IReadOnlyList<RankedCountryRecord>)cache.CountriesById.Values.OrderBy(country => country.Name, StringComparer.Ordinal).ToList());
+    }
+
+    public Task<IReadOnlyList<RankedClueDefinition>> GetBuiltinClueCatalogAsync(CancellationToken cancellationToken)
+    {
+        var cache = GetOrLoadCache();
+        return Task.FromResult(cache.Clues);
     }
 
     private DatasetCache GetOrLoadCache()
@@ -125,13 +136,19 @@ public sealed class FileRankedDatasetProvider(BuiltInDatasetCatalog builtInDatas
 
     private static IReadOnlyList<RankedClueDefinition> BuildPublicClues(ManifestDocument manifest)
     {
-        var clues = new List<RankedClueDefinition>(DefaultClueIds.Length);
+        var clues = new List<RankedClueDefinition>();
+        var grouped = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var clueId in DefaultClueIds)
+        foreach (var clue in manifest.Clues.Where(clue => clue.Source == "builtin"))
         {
-            if (clueId == "temperature_avg_c")
+            if (clue.Group == "temperature_avg_c")
             {
-                var monthlyClue = manifest.Clues.First(clue => clue.Group == "temperature_avg_c" && clue.Month == 1);
+                if (!grouped.Add("temperature_avg_c"))
+                {
+                    continue;
+                }
+
+                var monthlyClue = manifest.Clues.First(entry => entry.Group == "temperature_avg_c" && entry.Month == 1);
                 clues.Add(new RankedClueDefinition(
                     "temperature_avg_c",
                     "Average Temperature",
@@ -140,11 +157,11 @@ public sealed class FileRankedDatasetProvider(BuiltInDatasetCatalog builtInDatas
                     RankedClueType.Numeric,
                     monthlyClue.Comparator ?? "higher_lower",
                     "temperature_avg_c",
-                    monthlyClue.UnitSymbol));
+                    monthlyClue.UnitSymbol,
+                    RankedClueSource.Builtin));
                 continue;
             }
 
-            var clue = manifest.Clues.First(entry => entry.Id == clueId);
             clues.Add(new RankedClueDefinition(
                 clue.Id,
                 clue.Label ?? clue.Id,
@@ -153,10 +170,30 @@ public sealed class FileRankedDatasetProvider(BuiltInDatasetCatalog builtInDatas
                 ParseClueType(clue.Type),
                 clue.Comparator ?? "exact",
                 clue.Group,
-                clue.UnitSymbol));
+                clue.UnitSymbol,
+                RankedClueSource.Builtin));
         }
 
-        return clues;
+        return clues
+            .DistinctBy(clue => clue.Id, StringComparer.Ordinal)
+            .OrderBy(clue => clue.Label, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    private static IReadOnlyList<RankedClueDefinition> SelectBuiltinClues(IReadOnlyList<RankedClueDefinition> clues, DateOnly challengeDateUtc)
+    {
+        var ordered = clues
+            .OrderBy(clue => ComputeDeterministicOrderKey(challengeDateUtc, clue.Id), StringComparer.Ordinal)
+            .Take(5)
+            .ToList();
+
+        return ordered;
+    }
+
+    private static string ComputeDeterministicOrderKey(DateOnly challengeDateUtc, string clueId)
+    {
+        var bytes = Encoding.UTF8.GetBytes($"{challengeDateUtc:yyyy-MM-dd}:{clueId}");
+        return Convert.ToHexString(SHA256.HashData(bytes));
     }
 
     private static RankedClueType ParseClueType(string type)

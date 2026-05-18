@@ -8,4 +8,6 @@ public sealed record RankedClueDefinition(
     RankedClueType Type,
     string Comparator,
     string? Group,
-    string? UnitSymbol);
+    string? UnitSymbol,
+    RankedClueSource Source = RankedClueSource.Builtin,
+    Guid? RemoteId = null);

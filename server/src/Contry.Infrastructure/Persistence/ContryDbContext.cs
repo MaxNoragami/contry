@@ -58,7 +58,9 @@ public sealed class ContryDbContext(DbContextOptions<ContryDbContext> options) :
             entity.HasKey(challenge => challenge.Id);
             entity.Property(challenge => challenge.TargetCountryId).HasMaxLength(16).IsRequired();
             entity.Property(challenge => challenge.ClueSetJson).HasColumnType("jsonb").IsRequired();
+            entity.Property(challenge => challenge.CustomClueDataJson).HasColumnType("jsonb");
             entity.Property(challenge => challenge.CreatedAtUtc).IsRequired();
+            entity.Property(challenge => challenge.UpdatedAtUtc).IsRequired();
 
             entity.HasIndex(challenge => challenge.ChallengeDateUtc).IsUnique();
         });
