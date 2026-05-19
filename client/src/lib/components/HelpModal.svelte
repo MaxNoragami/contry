@@ -1,35 +1,35 @@
 <script lang="ts">
-  import { X } from 'lucide-svelte'
-  import { fade } from 'svelte/transition'
-  import { getLucideIconUrl } from '../config/app'
+  import { X } from "lucide-svelte";
+  import { fade } from "svelte/transition";
+  import { getLucideIconUrl } from "../config/app";
 
   interface Props {
-    visible: boolean
-    game: any
-    onClose: () => void
+    visible: boolean;
+    game: any;
+    onClose: () => void;
   }
 
-  let { visible = $bindable(false), game, onClose }: Props = $props()
+  let { visible = $bindable(false), game, onClose }: Props = $props();
 
   const builtInClues = $derived.by(() =>
-    game.availableClues.filter((clue: any) => clue.source !== 'custom')
-  )
+    game.availableClues.filter((clue: any) => clue.source !== "custom"),
+  );
 
   const customClues = $derived.by(() =>
-    game.availableClues.filter((clue: any) => clue.source === 'custom')
-  )
+    game.availableClues.filter((clue: any) => clue.source === "custom"),
+  );
 
   function handleBackdropClick(e: MouseEvent) {
     if (e.target === e.currentTarget) {
-      onClose()
+      onClose();
     }
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (!visible) return
-    if (e.key === 'Escape') {
-      e.preventDefault()
-      onClose()
+    if (!visible) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      onClose();
     }
   }
 </script>
@@ -39,29 +39,41 @@
 {#if visible}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="modal-backdrop" onclick={handleBackdropClick} transition:fade={{ duration: 200 }}>
+  <div
+    class="modal-backdrop"
+    onclick={handleBackdropClick}
+    transition:fade={{ duration: 200 }}
+  >
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="modal-content" onclick={(e) => e.stopPropagation()}>
       <div class="modal-header">
         <h2>Help</h2>
-        <button class="icon-btn" aria-label="Close" onclick={onClose}><X size={20} /></button>
+        <button class="icon-btn" aria-label="Close" onclick={onClose}
+          ><X size={20} /></button
+        >
       </div>
 
       <div class="modal-body">
-        <p class="mission-text">Find the hidden country by comparing each guess against the clue feedback. Use what changes after every attempt to narrow the search and solve it in as few guesses as possible.</p>
+        <p class="mission-text">
+          Find the hidden country by comparing each guess against the clue
+          feedback. Use what changes after every attempt to narrow the search
+          and solve it in as few guesses as possible.
+        </p>
 
         <div class="section-divider"></div>
 
         <section class="section-block">
           <h3>Gameplay modes</h3>
           <p class="mission-text">
-            <strong>Arcade mode</strong><br/>
-            Play at your own pace. You can change the target country anytime and guess as many times as you like.
+            <strong>Arcade mode</strong><br />
+            Play at your own pace. You can change the target country anytime and
+            guess as many times as you like.
           </p>
           <p class="mission-text">
-            <strong>Ranked mode</strong><br/>
-            Compete on the global leaderboard. Everyone gets the same target country and clue set each day.
+            <strong>Ranked mode</strong><br />
+            Compete on the global leaderboard. Everyone gets the same target country
+            and clue set each day.
           </p>
         </section>
 
@@ -77,12 +89,17 @@
                     {@const IconComponent = clue.icon}
                     <IconComponent size={20} />
                   {:else if clue.customIcon}
-                    <div class="custom-icon" style={`mask-image: url('${getLucideIconUrl(clue.customIcon)}'); -webkit-mask-image: url('${getLucideIconUrl(clue.customIcon)}');`}></div>
+                    <div
+                      class="custom-icon"
+                      style={`mask-image: url('${getLucideIconUrl(clue.customIcon)}'); -webkit-mask-image: url('${getLucideIconUrl(clue.customIcon)}');`}
+                    ></div>
                   {/if}
                 </div>
                 <div class="clue-copy">
                   <div class="clue-name">{clue.label}</div>
-                  <p class="clue-description">{clue.description || 'No description provided yet.'}</p>
+                  <p class="clue-description">
+                    {clue.description || "No description provided yet."}
+                  </p>
                 </div>
               </div>
             {/each}
@@ -100,12 +117,17 @@
                       {@const IconComponent = clue.icon}
                       <IconComponent size={20} />
                     {:else if clue.customIcon}
-                      <div class="custom-icon" style={`mask-image: url('${getLucideIconUrl(clue.customIcon)}'); -webkit-mask-image: url('${getLucideIconUrl(clue.customIcon)}');`}></div>
+                      <div
+                        class="custom-icon"
+                        style={`mask-image: url('${getLucideIconUrl(clue.customIcon)}'); -webkit-mask-image: url('${getLucideIconUrl(clue.customIcon)}');`}
+                      ></div>
                     {/if}
                   </div>
                   <div class="clue-copy">
                     <div class="clue-name custom-name">{clue.label}</div>
-                    <p class="clue-description">{clue.description || 'No description provided yet.'}</p>
+                    <p class="clue-description">
+                      {clue.description || "No description provided yet."}
+                    </p>
                   </div>
                 </div>
               {/each}
@@ -120,27 +142,37 @@
           <div class="legend-list">
             <div class="legend-row">
               <div class="legend-dot legend-dot--red"></div>
-              <p class="legend-text">Red means this clue is far from the hidden country.</p>
+              <p class="legend-text">
+                Red means this clue is far from the hidden country.
+              </p>
             </div>
             <div class="legend-row">
               <div class="legend-dot legend-dot--yellow"></div>
-              <p class="legend-text">Yellow means you are getting closer, but it is not an exact match yet.</p>
+              <p class="legend-text">
+                Yellow means you are getting closer, but it is not an exact
+                match yet.
+              </p>
             </div>
             <div class="legend-row">
               <div class="legend-dot legend-dot--green"></div>
-              <p class="legend-text">Green means that clue matches the hidden country.</p>
+              <p class="legend-text">
+                Green means that clue matches the hidden country.
+              </p>
             </div>
           </div>
-
 
           <div class="legend-list legend-list--arrows">
             <div class="legend-row">
               <div class="legend-arrow">▲</div>
-              <p class="legend-text">An up arrow means the hidden country's value is higher.</p>
+              <p class="legend-text">
+                An up arrow means the hidden country's value is higher.
+              </p>
             </div>
             <div class="legend-row">
               <div class="legend-arrow">▼</div>
-              <p class="legend-text">A down arrow means the hidden country's value is lower.</p>
+              <p class="legend-text">
+                A down arrow means the hidden country's value is lower.
+              </p>
             </div>
           </div>
         </section>
@@ -218,7 +250,10 @@
     display: grid;
     place-items: center;
     cursor: pointer;
-    transition: background 0.2s, box-shadow 0.2s, color 0.2s;
+    transition:
+      background 0.2s,
+      box-shadow 0.2s,
+      color 0.2s;
     outline: none;
   }
 
@@ -251,16 +286,11 @@
     display: none;
   }
 
-  .mission-text,
-  .empty-text {
+  .mission-text {
     margin: 0;
     font-size: 15px;
     line-height: 1.6;
     color: var(--text);
-  }
-
-  .empty-text {
-    color: var(--muted);
   }
 
   .section-block {
