@@ -163,7 +163,10 @@ public sealed class RankedFlowTests(TestWebApplicationFactory factory) : IClassF
     private static async Task<string> GetCurrentTargetCountryIdAsync()
     {
         var today = DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
-        var countriesPath = "/home/makkusu/uni/contry/server/datasets/base/countries.csv";
+        var baseDir = AppContext.BaseDirectory;
+        var srcIndex = baseDir.IndexOf("server", StringComparison.OrdinalIgnoreCase);
+        var serverDir = srcIndex >= 0 ? baseDir[..(srcIndex + 6)] : Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", ".."));
+        var countriesPath = Path.Combine(serverDir, "datasets", "base", "countries.csv");
         var countryIds = (await File.ReadAllLinesAsync(countriesPath))
             .Skip(1)
             .Where(line => !string.IsNullOrWhiteSpace(line))

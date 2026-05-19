@@ -1,4 +1,5 @@
 using Contry.Api.Common.OpenApi;
+using Contry.Api.Features.KeepAlive;
 using Contry.Infrastructure.Configuration;
 using FluentValidation;
 using Microsoft.OpenApi;
@@ -13,6 +14,8 @@ public static class ApiServiceCollectionExtensions
         services.AddContryCors(configuration);
         services.AddContrySwagger();
         services.AddEndpointsApiExplorer();
+        services.AddHttpClient();
+        services.AddHostedService<KeepAliveService>();
 
         return services;
     }

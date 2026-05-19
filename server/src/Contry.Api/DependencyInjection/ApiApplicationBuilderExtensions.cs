@@ -8,7 +8,7 @@ using Contry.Api.Features.Ranked.Challenges;
 using Contry.Api.Features.Ranked.Guesses;
 using Contry.Api.Features.Ranked.Sessions;
 using Contry.Api.Features.Ranked.Stats;
-using Contry.Api.Features.TestRecords;
+
 using Contry.Infrastructure.Datasets;
 using Contry.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -60,7 +60,7 @@ public static class ApiApplicationBuilderExtensions
         app.MapRankedGuessEndpoints();
         app.MapRankedStatsEndpoints();
         app.MapLeaderboardEndpoints();
-        app.MapTestRecordEndpoints();
+        app.MapGet("/ping", () => TypedResults.Ok());
     }
 
     private static async Task MigrateDatabaseAsync(this WebApplication app)

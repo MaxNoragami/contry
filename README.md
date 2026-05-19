@@ -58,6 +58,14 @@ Start the full stack:
 docker compose up --build
 ```
 
+This defaults to the development env contract from `.env.dev` through the committed root `.env` selector.
+
+Start the production-shaped stack locally:
+
+```bash
+docker compose --env-file .env.prod up --build
+```
+
 Start only PostgreSQL:
 
 ```bash
@@ -113,6 +121,24 @@ cd client
 bun run check
 bun run build
 ```
+
+## Docker env selection
+
+- Default local Docker startup uses the committed root `.env`, which points Compose at `.env.dev`.
+- To switch the stack to the production-shaped env contract, use:
+
+```bash
+docker compose --env-file .env.prod up --build
+```
+
+- Compose-time interpolation and container runtime env are both sourced from the selected env file set.
+- Docker-specific overrides such as:
+  - `DOCKER_ConnectionStrings__Database`
+  - `DOCKER_Cors__AllowedOriginsCsv`
+  - `DOCKER_AuthCookies__Domain`
+  - `DOCKER_AuthCookies__SecurePolicy`
+  - `DOCKER_VITE_API_BASE_URL`
+  exist so the full stack remains testable locally without hardcoding those values in `docker-compose.yml`.
 
 ## Admin endpoints
 

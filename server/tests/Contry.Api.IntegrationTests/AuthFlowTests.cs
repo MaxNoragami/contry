@@ -3,7 +3,6 @@ using System.Text;
 using System.Net.Mime;
 using System.Net.Http.Json;
 using Contry.Api.Features.Auth;
-using Contry.Api.Features.TestRecords;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Contry.Api.IntegrationTests;
@@ -42,11 +41,6 @@ public sealed class AuthFlowTests(TestWebApplicationFactory factory) : IClassFix
         Assert.Equal(HttpStatusCode.OK, refreshResponse.StatusCode);
         var rotatedCookies = ParseCookies(refreshResponse);
         Assert.NotEqual(cookies["contry_refresh"], rotatedCookies["contry_refresh"]);
-
-        var createRequest = CreateRequest(HttpMethod.Post, "/test-records", rotatedCookies, xsrf.Token);
-        createRequest.Content = JsonContent.Create(new CreateTestRecordRequest("post-refresh", "same xsrf across refresh family"));
-        var createResponse = await client.SendAsync(createRequest);
-        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
 
         var logoutResponse = await client.SendAsync(CreateRequest(HttpMethod.Delete, "/sessions/current", rotatedCookies, xsrf.Token));
         Assert.Equal(HttpStatusCode.NoContent, logoutResponse.StatusCode);
@@ -115,8 +109,7 @@ public sealed class AuthFlowTests(TestWebApplicationFactory factory) : IClassFix
             ["contry_refresh"] = cookies["contry_refresh"]
         };
 
-        var request = CreateRequest(HttpMethod.Post, "/test-records", refreshOnlyCookies);
-        request.Content = JsonContent.Create(new CreateTestRecordRequest("demo", "xsrf should be checked first"));
+        var request = CreateRequest(HttpMethod.Delete, "/clue-packs/00000000-0000-0000-0000-000000000000", refreshOnlyCookies);
 
         var response = await client.SendAsync(request);
 
@@ -144,14 +137,13 @@ public sealed class AuthFlowTests(TestWebApplicationFactory factory) : IClassFix
             ["contry_refresh"] = cookies["contry_refresh"]
         };
 
-        var request = CreateRequest(HttpMethod.Post, "/test-records", refreshOnlyCookies, xsrf.Token);
-        request.Content = JsonContent.Create(new CreateTestRecordRequest("demo", "auth should fail after xsrf succeeds"));
+        var request = CreateRequest(HttpMethod.Delete, "/clue-packs/00000000-0000-0000-0000-000000000000", refreshOnlyCookies, xsrf.Token);
 
         var response = await client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         var problem = (await response.Content.ReadFromJsonAsync<ProblemResponse>())!;
-        Assert.Equal("/problems/auth/invalid-access-token", problem.Type);
+        Assert.Equal("/problems/auth/unauthorized", problem.Type);
         Assert.Equal(401, problem.Status);
     }
 
@@ -208,34 +200,7 @@ public sealed class AuthFlowTests(TestWebApplicationFactory factory) : IClassFix
         Assert.False(string.IsNullOrWhiteSpace(problem.TraceId));
     }
 
-    [Fact]
-    public async Task AuthenticatedTestRecordFlow_CreatesAndReadsOwnedRecord()
-    {
-        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
 
-        var registerResponse = await client.PostAsJsonAsync("/users", new RegisterUserRequest("record-user", "record-user@example.com", "Password123!"));
-        Assert.Equal(HttpStatusCode.Created, registerResponse.StatusCode);
-        var cookies = ParseCookies(registerResponse);
-
-        var xsrfResponse = await client.SendAsync(CreateRequest(HttpMethod.Get, "/xsrf", cookies));
-        Assert.Equal(HttpStatusCode.OK, xsrfResponse.StatusCode);
-        var xsrf = (await xsrfResponse.Content.ReadFromJsonAsync<XsrfTokenResponse>())!;
-
-        var createRequest = CreateRequest(HttpMethod.Post, "/test-records", cookies, xsrf.Token);
-        createRequest.Content = JsonContent.Create(new CreateTestRecordRequest("demo record", "used for auth flow testing"));
-        var createResponse = await client.SendAsync(createRequest);
-
-        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
-        var created = (await createResponse.Content.ReadFromJsonAsync<TestRecordResponse>())!;
-        Assert.Equal("demo record", created.Name);
-
-        var getResponse = await client.SendAsync(CreateRequest(HttpMethod.Get, $"/test-records/{created.Id}", cookies));
-        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
-        var fetched = (await getResponse.Content.ReadFromJsonAsync<TestRecordResponse>())!;
-        Assert.Equal(created.Id, fetched.Id);
-        Assert.Equal(created.UserId, fetched.UserId);
-        Assert.Equal("used for auth flow testing", fetched.Notes);
-    }
 
     private static HttpRequestMessage CreateRequest(HttpMethod method, string uri, IReadOnlyDictionary<string, string> cookies, string? xsrfToken = null)
     {
