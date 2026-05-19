@@ -1,0 +1,26 @@
+# Cōntry
+
+> Canonical URL: https://contry.app/
+
+Cōntry is a browser-based country guessing game inspired by Wordle and Countryle.
+Guess the hidden country using directional, categorical, and numeric clues.
+
+## Key topics
+
+- country guessing game
+- wordle country guessing game
+- countryle alternative
+- geography puzzle game
+- browser-based clue game
+
+## Public pages
+
+- https://contry.app/
+
+## Product summary
+
+Cōntry is an interactive geography guessing game where players try to identify a hidden country.
+The game provides clue-based feedback through category matches, higher/lower numeric hints, and directional signals.
+
+Arcade mode is local-first in the browser.
+Ranked mode is backend-authoritative and requires authentication.
