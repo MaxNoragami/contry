@@ -27,8 +27,9 @@ public static class ApiApplicationBuilderExtensions
         if (app.Environment.IsDevelopment())
         {
             await DatabaseSeeder.SeedDevelopmentDataAsync(app);
-            app.UseConfiguredSwaggerUi();
         }
+        
+        app.UseConfiguredSwaggerUi();
 
         app.UseStaticFiles();
         app.UseHttpsRedirection();
