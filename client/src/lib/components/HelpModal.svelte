@@ -54,6 +54,20 @@
         <div class="section-divider"></div>
 
         <section class="section-block">
+          <h3>Gameplay modes</h3>
+          <p class="mission-text">
+            <strong>Arcade mode</strong><br/>
+            Play at your own pace. You can change the target country anytime and guess as many times as you like.
+          </p>
+          <p class="mission-text">
+            <strong>Ranked mode</strong><br/>
+            Compete on the global leaderboard. Everyone gets the same target country and clue set each day.
+          </p>
+        </section>
+
+        <div class="section-divider"></div>
+
+        <section class="section-block">
           <h3>The clues</h3>
           <div class="clue-list">
             {#each builtInClues as clue (clue.id)}
@@ -75,9 +89,9 @@
           </div>
         </section>
 
-        <section class="section-block">
-          <h3>Custom clues</h3>
-          {#if customClues.length > 0}
+        {#if customClues.length > 0}
+          <section class="section-block">
+            <h3>Custom clues</h3>
             <div class="clue-list">
               {#each customClues as clue (clue.id)}
                 <div class="clue-row">
@@ -96,10 +110,8 @@
                 </div>
               {/each}
             </div>
-          {:else}
-            <p class="empty-text">You have not created any custom clues yet.</p>
-          {/if}
-        </section>
+          </section>
+        {/if}
 
         <div class="section-divider"></div>
 
