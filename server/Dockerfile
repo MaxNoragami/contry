@@ -22,5 +22,6 @@ EXPOSE 8080
 
 COPY --from=build /app/publish .
 COPY --from=build /src/server/datasets /datasets
+COPY --from=build /src/server/ca.pem /app/ca.pem
 
 ENTRYPOINT ["dotnet", "Contry.Api.dll"]
