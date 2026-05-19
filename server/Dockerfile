@@ -15,9 +15,12 @@ RUN dotnet publish "server/src/Contry.Api/Contry.Api.csproj" -c Release -o /app/
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS final
 WORKDIR /app
 
+RUN apk add --no-cache krb5-libs
+
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080
 
 COPY --from=build /app/publish .
+COPY --from=build /src/server/datasets /datasets
 
 ENTRYPOINT ["dotnet", "Contry.Api.dll"]
