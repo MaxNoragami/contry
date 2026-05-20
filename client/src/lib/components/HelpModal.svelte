@@ -1,7 +1,7 @@
 <script lang="ts">
   import { X } from "lucide-svelte";
   import { fade } from "svelte/transition";
-  import { getLucideIconUrl } from "../config/app";
+  import { APP_TIMINGS, getLucideIconUrl } from "../config/app";
 
   interface Props {
     visible: boolean;
@@ -11,6 +11,9 @@
 
   let { visible = $bindable(false), game, onClose }: Props = $props();
 
+  let sessionId = $state<string | null>(null);
+  let historyDepth = $state(0);
+
   const builtInClues = $derived.by(() =>
     game.availableClues.filter((clue: any) => clue.source !== "custom"),
   );
@@ -19,9 +22,47 @@
     game.availableClues.filter((clue: any) => clue.source === "custom"),
   );
 
+  $effect(() => {
+    if (visible) {
+      if (!sessionId) {
+        sessionId = crypto.randomUUID();
+      }
+      const currentState = window.history.state;
+      if (currentState?.modal !== "help" || currentState?.sessionId !== sessionId) {
+        window.history.pushState({ modal: "help", sessionId }, "");
+        historyDepth++;
+      }
+    }
+  });
+
+  function onPopState(e: PopStateEvent) {
+    if (visible) {
+      if (e.state?.modal === "help" && e.state.sessionId === sessionId) {
+        if (historyDepth > 0) historyDepth -= 1;
+      } else {
+        onClose();
+        setTimeout(() => {
+          sessionId = null;
+          historyDepth = 0;
+        }, APP_TIMINGS.modalResetMs);
+      }
+    }
+  }
+
+  function close() {
+    if (historyDepth > 0) {
+      window.history.go(-historyDepth);
+    }
+    onClose();
+    setTimeout(() => {
+      sessionId = null;
+      historyDepth = 0;
+    }, APP_TIMINGS.modalResetMs);
+  }
+
   function handleBackdropClick(e: MouseEvent) {
     if (e.target === e.currentTarget) {
-      onClose();
+      close();
     }
   }
 
@@ -29,12 +70,12 @@
     if (!visible) return;
     if (e.key === "Escape") {
       e.preventDefault();
-      onClose();
+      close();
     }
   }
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} onpopstate={onPopState} />
 
 {#if visible}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -49,7 +90,7 @@
     <div class="modal-content" onclick={(e) => e.stopPropagation()}>
       <div class="modal-header">
         <h2>Help</h2>
-        <button class="icon-btn" aria-label="Close" onclick={onClose}
+        <button class="icon-btn" aria-label="Close" onclick={close}
           ><X size={20} /></button
         >
       </div>

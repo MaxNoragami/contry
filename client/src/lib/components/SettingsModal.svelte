@@ -124,6 +124,7 @@ import { toastStore } from "../stores/toasts.svelte";
         typeof e.state.view === "string"
       ) {
         const nextView = e.state.view as ViewType;
+        if (historyDepth > 0) historyDepth -= 1;
         if (view === "add-clue" && nextView !== "add-clue" && addHasUnsavedChanges) {
           window.history.pushState(buildModalState("add-clue"), "");
           historyDepth++;
@@ -469,11 +470,11 @@ import { toastStore } from "../stores/toasts.svelte";
       {/if}
 
       {#if view === "admin-panel"}
-        <AdminPanelSettings onBack={goBack} onNavigate={navigateTo} direction={navDirection} />
+        <AdminPanelSettings onBack={goBack} onClose={close} onNavigate={navigateTo} direction={navDirection} />
       {/if}
 
       {#if view === "admin-ranked-round"}
-        <AdminRankedRoundSettings {auth} onBack={goBack} direction={navDirection} />
+        <AdminRankedRoundSettings {auth} onBack={goBack} onClose={close} direction={navDirection} />
       {/if}
 
       {#if view === 'admin-reset-leaderboard-warning'}
@@ -505,6 +506,7 @@ import { toastStore } from "../stores/toasts.svelte";
           {auth}
           {mode}
           onBack={goBack}
+          onClose={close}
           onNavigate={navigateTo}
           onEditCustomClue={openLocalCustomClue}
           onBeforeExplore={() => getDB().then(async (db) => { await syncWorkspaceLinkedClues(db, getCloudDetailFetcher(auth), { force: true }); await game.refreshCustomClueCatalog(false) })}
@@ -516,6 +518,7 @@ import { toastStore } from "../stores/toasts.svelte";
       {#if view === "explore-clues"}
         <ExploreCluesSettings
           onBack={goBack}
+          onClose={close}
           direction={navDirection}
           onOpenCluePack={openPublishedCluePack}
         />
@@ -526,6 +529,7 @@ import { toastStore } from "../stores/toasts.svelte";
           {game}
           {auth}
           onBack={goBack}
+          onClose={close}
           onNavigate={navigateTo}
           direction={navDirection}
           bind:hasUnsavedChanges={addHasUnsavedChanges}
@@ -539,6 +543,7 @@ import { toastStore } from "../stores/toasts.svelte";
           {game}
           {auth}
           onBack={goBack}
+          onClose={close}
           onNavigate={navigateTo}
           direction={navDirection}
           bind:hasUnsavedChanges={editHasUnsavedChanges}
@@ -551,6 +556,7 @@ import { toastStore } from "../stores/toasts.svelte";
         <ViewClueSettings
           {auth}
           onBack={goBack}
+          onClose={close}
           onNavigate={navigateTo as (view: 'dataset-editor') => void}
           onRemoveLocalCopy={removeViewedLocalCopy}
           direction={navDirection}
@@ -561,6 +567,7 @@ import { toastStore } from "../stores/toasts.svelte";
       {#if view === "icon-picker"}
         <IconPickerSettings
           onBack={goBack}
+          onClose={close}
           direction={navDirection}
           bind:newClueDraft
         />
@@ -570,6 +577,7 @@ import { toastStore } from "../stores/toasts.svelte";
         <DatasetEditorSettings
           {game}
           onBack={goBack}
+          onClose={close}
           direction={navDirection}
           bind:newClueDraft
         />

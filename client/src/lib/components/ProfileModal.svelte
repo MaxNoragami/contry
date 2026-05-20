@@ -95,6 +95,7 @@
     ) {
       direction = 'back'
       view = event.state.view as ProfileView
+      if (historyDepth > 0) historyDepth -= 1
     } else {
       visible = false
       setTimeout(resetModalState, APP_TIMINGS.modalResetMs)
@@ -550,19 +551,19 @@
       {/if}
 
       {#if auth.isAuthenticated && view === 'leaderboard'}
-        <LeaderboardPage goBack={goBack} {direction} />
+        <LeaderboardPage goBack={goBack} onClose={close} {direction} />
       {/if}
 
       {#if auth.isAuthenticated && view === 'discovery'}
-        <DiscoveryStatsPage {auth} goBack={goBack} {direction} />
+        <DiscoveryStatsPage {auth} goBack={goBack} onClose={close} {direction} />
       {/if}
 
       {#if auth.isAuthenticated && view === 'distributions'}
-        <DistributionStatsPage {auth} goBack={goBack} {direction} />
+        <DistributionStatsPage {auth} goBack={goBack} onClose={close} {direction} />
       {/if}
 
       {#if auth.isAuthenticated && view === 'clues'}
-        <ClueUsageStatsPage {auth} goBack={goBack} {direction} />
+        <ClueUsageStatsPage {auth} goBack={goBack} onClose={close} {direction} />
       {/if}
     </div>
   </div>
