@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowLeft, Download, Table2, Trash2 } from 'lucide-svelte'
+  import { ArrowLeft, Download, Table2, Trash2, X } from 'lucide-svelte'
   import { fly } from 'svelte/transition'
   import type { createAuthStore } from '../../stores/auth.svelte'
   import type { DraftClueData, NavDirection } from './types'
@@ -7,13 +7,14 @@
   interface Props {
     auth: ReturnType<typeof createAuthStore>
     onBack: () => void
+    onClose: () => void
     onNavigate: (view: 'dataset-editor') => void
     onRemoveLocalCopy: () => Promise<void> | void
     direction: NavDirection
     newClueDraft: DraftClueData
   }
 
-  let { auth, onBack, onNavigate, onRemoveLocalCopy, direction, newClueDraft = $bindable() }: Props = $props()
+  let { auth, onBack, onClose, onNavigate, onRemoveLocalCopy, direction, newClueDraft = $bindable() }: Props = $props()
 
   const ownerLabel = $derived.by(() => {
     if (!newClueDraft.ownerUsername) return 'Published clue'
@@ -27,7 +28,7 @@
   <div class="modal-header">
     <button class="icon-btn back-btn" aria-label="Back" onclick={onBack}><ArrowLeft /></button>
     <h2 class="centered-title">Clue Details</h2>
-    <div class="header-spacer"></div>
+    <button class="icon-btn" aria-label="Close" onclick={onClose}><X /></button>
   </div>
 
   <div class="modal-body form-body">

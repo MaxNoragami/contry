@@ -1,15 +1,16 @@
 <script lang="ts">
-  import { ArrowLeft, ChevronLeft, ChevronRight, Trophy } from 'lucide-svelte'
+  import { ArrowLeft, ChevronLeft, ChevronRight, Trophy, X } from 'lucide-svelte'
   import { fly } from 'svelte/transition'
   import { APP_LIMITS } from '../../config/app'
   import { getRankedLeaderboard, type RankedLeaderboardEntry, type GetRankedLeaderboardResult } from '../../api/client'
 
   interface Props {
     goBack: () => void
+    onClose: () => void
     direction: 'forward' | 'back'
   }
 
-  let { goBack, direction }: Props = $props()
+  let { goBack, onClose, direction }: Props = $props()
 
   let data = $state<GetRankedLeaderboardResult | null>(null)
   let loading = $state(true)
@@ -61,7 +62,7 @@
   <div class="modal-header">
     <button class="icon-btn back-btn" aria-label="Back" onclick={goBack}><ArrowLeft /></button>
     <h2 class="centered-title">Leaderboard</h2>
-    <div class="header-spacer"></div>
+    <button class="icon-btn" aria-label="Close" onclick={onClose}><X /></button>
   </div>
 
   <div class="modal-body">

@@ -1,16 +1,17 @@
 <script lang="ts">
-  import { ArrowLeft } from 'lucide-svelte'
+  import { ArrowLeft, X } from 'lucide-svelte'
   import { fly } from 'svelte/transition'
   import type { DraftClueData, NavDirection } from './types'
 
   interface Props {
     game: any
     onBack: () => void
+    onClose: () => void
     direction: NavDirection
     newClueDraft: DraftClueData
   }
 
-  let { game, onBack, direction, newClueDraft = $bindable() }: Props = $props()
+  let { game, onBack, onClose, direction, newClueDraft = $bindable() }: Props = $props()
 
   let searchQuery = $state('')
 
@@ -74,6 +75,9 @@
         placeholder="Filter countries..." 
       />
     </div>
+    <button class="icon-btn" aria-label="Close" onclick={onClose}>
+      <X />
+    </button>
   </div>
   
   <div class="modal-body">

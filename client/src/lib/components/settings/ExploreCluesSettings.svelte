@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowLeft, Binoculars, ChevronLeft, ChevronRight, Download, Pencil, Search } from 'lucide-svelte'
+  import { ArrowLeft, Binoculars, ChevronLeft, ChevronRight, Download, Pencil, Search, X } from 'lucide-svelte'
   import { fly } from 'svelte/transition'
   import { APP_LIMITS } from '../../config/app'
   import { listCluePacks, type CluePackListItemDto } from '../../api/client'
@@ -7,11 +7,12 @@
 
   interface Props {
     onBack: () => void
+    onClose: () => void
     direction: NavDirection
     onOpenCluePack: (id: string) => void | Promise<void>
   }
 
-  let { onBack, direction, onOpenCluePack }: Props = $props()
+  let { onBack, onClose, direction, onOpenCluePack }: Props = $props()
 
   let query = $state('')
   let page = $state(1)
@@ -75,7 +76,7 @@
   <div class="modal-header">
     <button class="icon-btn back-btn" aria-label="Back" onclick={onBack}><ArrowLeft /></button>
     <h2 class="centered-title">Explore Clues</h2>
-    <div class="header-spacer"></div>
+    <button class="icon-btn" aria-label="Close" onclick={onClose}><X /></button>
   </div>
 
   <div class="modal-body">

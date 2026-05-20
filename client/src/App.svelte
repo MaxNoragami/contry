@@ -227,9 +227,51 @@
 
     profileOpen = true;
   }
+  import { onMount } from 'svelte';
+
+  let trapInitialized = false;
+  function initTrap() {
+    if (trapInitialized) return;
+    trapInitialized = true;
+    if (!window.history.state?.appRoot) {
+      window.history.replaceState({ isTrapBase: true }, "");
+      window.history.pushState({ appRoot: true }, "");
+    }
+  }
+
+  onMount(() => {
+    if (window.history.state?.appRoot) {
+      trapInitialized = true;
+    }
+  });
+
+  function onPopState(e: PopStateEvent) {
+    if (e.state?.isTrapBase) {
+      // The user hit back from the app root. Push the state again to trap them.
+      window.history.pushState({ appRoot: true }, "");
+      return;
+    }
+
+    if (!settingsOpen && !helpOpen && !profileOpen && !giveUpOpen) {
+      if (!e.state || (!e.state.appRoot && !e.state.isTrapBase)) {
+        window.history.replaceState({ isTrapBase: true }, "");
+        window.history.pushState({ appRoot: true }, "");
+      }
+    }
+  }
+
+  function handleKeydownWrapper(e: KeyboardEvent) {
+    initTrap();
+    handleGlobalKeydown(e);
+  }
 </script>
 
-<svelte:window onkeydown={handleGlobalKeydown} />
+<svelte:window 
+  onkeydown={handleKeydownWrapper} 
+  onpopstate={onPopState} 
+  onclick={initTrap} 
+  ontouchstart={initTrap} 
+/>
 
 <ToastStack />
 

@@ -2,6 +2,8 @@
   import { X, Flag } from 'lucide-svelte'
   import { fade, fly } from 'svelte/transition'
 
+  import { APP_TIMINGS } from '../config/app'
+
   interface Props {
     visible: boolean
     onConfirm: () => void
@@ -10,9 +12,50 @@
 
   let { visible = $bindable(false), onConfirm, onCancel }: Props = $props()
 
+  let sessionId = $state<string | null>(null)
+  let historyDepth = $state(0)
+
+  $effect(() => {
+    if (visible) {
+      if (!sessionId) {
+        sessionId = crypto.randomUUID()
+      }
+      const currentState = window.history.state
+      if (currentState?.modal !== 'give-up' || currentState?.sessionId !== sessionId) {
+        window.history.pushState({ modal: 'give-up', sessionId }, '')
+        historyDepth++
+      }
+    }
+  })
+
+  function onPopState(e: PopStateEvent) {
+    if (visible) {
+      if (e.state?.modal === 'give-up' && e.state.sessionId === sessionId) {
+        if (historyDepth > 0) historyDepth -= 1;
+      } else {
+        onCancel()
+        setTimeout(() => {
+          sessionId = null
+          historyDepth = 0
+        }, APP_TIMINGS.modalResetMs)
+      }
+    }
+  }
+
+  function close() {
+    if (historyDepth > 0) {
+      window.history.go(-historyDepth)
+    }
+    onCancel()
+    setTimeout(() => {
+      sessionId = null
+      historyDepth = 0
+    }, APP_TIMINGS.modalResetMs)
+  }
+
   function handleBackdropClick(e: MouseEvent) {
     if (e.target === e.currentTarget) {
-      onCancel()
+      close()
     }
   }
 
@@ -20,12 +63,12 @@
     if (!visible) return
     if (e.key === 'Escape') {
       e.preventDefault()
-      onCancel()
+      close()
     }
   }
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} onpopstate={onPopState} />
 
 {#if visible}
 <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -34,17 +77,22 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="modal-content" onclick={e => e.stopPropagation()} in:fly={{ y: 20, duration: 250 }}>
-    <button class="close-btn" aria-label="Close" onclick={onCancel}>
-      <X size={20} />
-    </button>
-
-    <div class="modal-icon">
-      <Flag size={36} />
+    <div class="modal-header">
+      <div style="width: 40px"></div>
+      <h2>Give up?</h2>
+      <button class="icon-btn" aria-label="Close" onclick={close}>
+        <X />
+      </button>
     </div>
-    <h2>Give up?</h2>
-    <p class="modal-description">The answer will be revealed and this round will end. Ranked give-ups count as a DNF loss.</p>
 
-    <button class="btn-confirm" onclick={onConfirm}>Give up</button>
+    <div class="modal-body">
+      <div class="modal-icon">
+        <Flag size={36} />
+      </div>
+      <p class="modal-description">The answer will be revealed and this round will end. Ranked give-ups count as a DNF loss.</p>
+
+      <button class="btn-confirm" onclick={onConfirm}>Give up</button>
+    </div>
   </div>
 </div>
 {/if}
@@ -72,10 +120,8 @@
     width: 100%;
     max-width: 480px;
     border-radius: 24px 24px 0 0;
-    padding: 32px 28px 28px;
     display: flex;
     flex-direction: column;
-    align-items: center;
     color: var(--text);
     box-shadow: var(--shadow-lift);
     animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
@@ -91,12 +137,23 @@
     }
   }
 
-  .close-btn {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    width: 36px;
-    height: 36px;
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+  }
+
+  .modal-body {
+    padding: 0 28px 28px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .icon-btn {
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     border: none;
     background: transparent;
@@ -104,17 +161,22 @@
     display: grid;
     place-items: center;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: background 0.2s, box-shadow 0.2s, color 0.2s;
+    outline: none;
   }
 
   @media (hover: hover) {
-    .close-btn:hover {
+    .icon-btn:hover:not(:disabled) {
       background: var(--hover-strong);
     }
   }
 
-  .close-btn:active {
+  .icon-btn:active:not(:disabled) {
     background: var(--hover-strong);
+  }
+
+  .icon-btn:focus-visible:not(:disabled) {
+    box-shadow: inset 0 0 0 1px var(--info);
   }
 
   .modal-icon {

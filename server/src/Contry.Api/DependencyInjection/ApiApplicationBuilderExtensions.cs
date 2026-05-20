@@ -61,7 +61,11 @@ public static class ApiApplicationBuilderExtensions
         app.MapRankedGuessEndpoints();
         app.MapRankedStatsEndpoints();
         app.MapLeaderboardEndpoints();
-        app.MapGet("/ping", () => TypedResults.Ok());
+        app.MapGet("/ping", (HttpContext context, ILoggerFactory loggerFactory) => {
+            var logger = loggerFactory.CreateLogger("Contry.Ping");
+            logger.LogInformation("Ping received from {IpAddress}", context.Connection.RemoteIpAddress);
+            return TypedResults.Ok();
+        });
     }
 
     private static async Task MigrateDatabaseAsync(this WebApplication app)

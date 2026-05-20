@@ -42,6 +42,7 @@
     game: any;
     auth: ReturnType<typeof createAuthStore>;
     onBack: () => void;
+    onClose: () => void;
     onNavigate: (view: ViewType) => void;
     direction: NavDirection;
     hasUnsavedChanges?: boolean;
@@ -53,6 +54,7 @@
     game,
     auth,
     onBack,
+    onClose,
     onNavigate,
     direction,
     hasUnsavedChanges = $bindable(false),
@@ -442,6 +444,7 @@
       <h2 class="centered-title">Edit Custom Clue</h2>
       <div class="header-actions">
         <button class="icon-btn save-btn" class:is-ready={!isSaveDisabled} aria-label="Save" onclick={handleSave} disabled={isSaveDisabled}><Save /></button>
+        <button class="icon-btn" aria-label="Close" onclick={onClose}><X /></button>
       </div>
     </div>
 

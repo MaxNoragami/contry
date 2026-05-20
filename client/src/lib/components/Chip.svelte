@@ -28,8 +28,10 @@
     min-height: 44px;
     border-radius: 10px;
     border: 1px solid transparent;
-    display: grid;
-    place-items: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     text-align: center;
     padding: 6px 4px;
     position: relative;
