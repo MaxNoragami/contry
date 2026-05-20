@@ -7,6 +7,7 @@
     GripVertical,
     Plus,
     Pencil,
+    X,
   } from "lucide-svelte";
   import { fly } from "svelte/transition";
   import { APP_LIMITS, DEFAULT_CLUE_IDS, getLucideIconUrl } from "../../config/app";
@@ -20,6 +21,7 @@
     auth: ReturnType<typeof createAuthStore>;
     mode: GameMode;
     onBack: () => void;
+    onClose: () => void;
     onNavigate: (view: ViewType) => void;
     onEditCustomClue: (clueId: string) => void | Promise<void>;
     onBeforeExplore?: () => Promise<void> | void;
@@ -32,6 +34,7 @@
     auth,
     mode,
     onBack,
+    onClose,
     onNavigate,
     onEditCustomClue,
     onBeforeExplore,
@@ -231,9 +234,16 @@
         >
           <Save />
         </button>
+        <button class="icon-btn" aria-label="Close" onclick={onClose}>
+          <X />
+        </button>
       </div>
     {:else}
-      <div class="header-spacer"></div>
+      <div class="header-actions">
+        <button class="icon-btn" aria-label="Close" onclick={onClose}>
+          <X />
+        </button>
+      </div>
     {/if}
   </div>
   <div class="modal-body clues-body">

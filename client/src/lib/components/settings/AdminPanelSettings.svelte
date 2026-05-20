@@ -1,22 +1,23 @@
 <script lang="ts">
-  import { ArrowLeft, CalendarDays, Shield, Trophy } from 'lucide-svelte'
+  import { ArrowLeft, CalendarDays, Shield, Trophy, X } from 'lucide-svelte'
   import { fly } from 'svelte/transition'
   import type { NavDirection, ViewType } from './types'
 
   interface Props {
     onBack: () => void
+    onClose: () => void
     onNavigate: (view: ViewType) => void
     direction: NavDirection
   }
 
-  let { onBack, onNavigate, direction }: Props = $props()
+  let { onBack, onClose, onNavigate, direction }: Props = $props()
 </script>
 
 <div class="view-container" in:fly={{ x: direction === 'back' ? -20 : 20, duration: 250, delay: 100 }} out:fly={{ x: direction === 'back' ? 20 : -20, duration: 200 }}>
   <div class="modal-header">
     <button class="icon-btn back-btn" aria-label="Back" onclick={onBack}><ArrowLeft /></button>
     <h2 class="centered-title">Admin Panel</h2>
-    <div class="header-spacer"></div>
+    <button class="icon-btn" aria-label="Close" onclick={onClose}><X /></button>
   </div>
 
   <div class="modal-body">

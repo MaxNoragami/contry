@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowLeft } from 'lucide-svelte'
+  import { ArrowLeft, X } from 'lucide-svelte'
   import { fly } from 'svelte/transition'
   import GuessDistributionChart from './GuessDistributionChart.svelte'
   import { API_PATHS } from '../../config/app'
@@ -10,10 +10,11 @@
   interface Props {
     auth: ReturnType<typeof createAuthStore>
     goBack: () => void
+    onClose: () => void
     direction: 'forward' | 'back'
   }
 
-  let { auth, goBack, direction }: Props = $props()
+  let { auth, goBack, onClose, direction }: Props = $props()
 
   type DistStatsPayload = {
     average_guesses: number | null
@@ -93,7 +94,7 @@
   <div class="modal-header">
     <button class="icon-btn back-btn" aria-label="Back" onclick={goBack}><ArrowLeft /></button>
     <h2 class="centered-title">Distributions</h2>
-    <div class="header-spacer"></div>
+    <button class="icon-btn" aria-label="Close" onclick={onClose}><X /></button>
   </div>
 
   <div class="modal-body">

@@ -26,6 +26,7 @@
     game: any;
     auth: ReturnType<typeof createAuthStore>;
     onBack: () => void;
+    onClose: () => void;
     onNavigate: (view: ViewType) => void;
     direction: NavDirection;
     hasUnsavedChanges?: boolean;
@@ -37,6 +38,7 @@
     game,
     auth,
     onBack,
+    onClose,
     onNavigate,
     direction,
     hasUnsavedChanges = $bindable(false),
@@ -513,6 +515,9 @@
           disabled={isSaveDisabled || cloudBusy}
         >
           <Save />
+        </button>
+        <button class="icon-btn" aria-label="Close" onclick={onClose}>
+          <X />
         </button>
       </div>
     </div>

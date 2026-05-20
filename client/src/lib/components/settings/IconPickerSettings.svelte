@@ -1,16 +1,17 @@
 <script lang="ts">
-  import { ArrowLeft, CircleAlert } from "lucide-svelte";
+  import { ArrowLeft, CircleAlert, X } from "lucide-svelte";
   import { fly } from "svelte/transition";
   import { APP_LIMITS, getLucideIconUrl, getLucideTagsUrl } from "../../config/app";
   import type { DraftClueData, NavDirection } from "./types";
 
   interface Props {
     onBack: () => void;
+    onClose: () => void;
     direction: NavDirection;
     newClueDraft: DraftClueData;
   }
 
-  let { onBack, direction, newClueDraft = $bindable() }: Props = $props();
+  let { onBack, onClose, direction, newClueDraft = $bindable() }: Props = $props();
 
   let searchQuery = $state("");
   let tagsData = $state<Record<string, string[]>>({});
@@ -69,6 +70,9 @@
         placeholder="Search icons..."
       />
     </div>
+    <button class="icon-btn" aria-label="Close" onclick={onClose}>
+      <X />
+    </button>
   </div>
 
   <div class="modal-body icon-grid">

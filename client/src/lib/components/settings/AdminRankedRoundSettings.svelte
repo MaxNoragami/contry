@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowLeft, CalendarDays, ChevronDown, CircleDot, Dices, GripVertical, Save, Search, Trash2 } from 'lucide-svelte'
+  import { ArrowLeft, CalendarDays, ChevronDown, CircleDot, Dices, GripVertical, Save, Search, Trash2, X } from 'lucide-svelte'
   import { fly } from 'svelte/transition'
   import { API_PATHS } from '../../config/app'
   import type { AdminRankedChallengeEditorDto, AdminRankedClueOptionDto, RankedCountryOptionDto } from '../../api/client'
@@ -10,10 +10,11 @@
   interface Props {
     auth: ReturnType<typeof createAuthStore>
     onBack: () => void
+    onClose: () => void
     direction: NavDirection
   }
 
-  let { auth, onBack, direction }: Props = $props()
+  let { auth, onBack, onClose, direction }: Props = $props()
 
   let mode = $state<'current' | 'tomorrow' | 'picker'>('current')
   let pickedDate = $state(getDateString(new Date()))
@@ -284,7 +285,10 @@
     <div class="modal-header">
       <button class="icon-btn back-btn" aria-label="Back" onclick={onBack}><ArrowLeft /></button>
       <h2 class="centered-title">Ranked Round</h2>
-      <button class="icon-btn save-btn" class:is-ready={!isSaveDisabled} aria-label="Save round" onclick={saveRound} disabled={isSaveDisabled}><Save /></button>
+      <div class="header-actions">
+        <button class="icon-btn save-btn" class:is-ready={!isSaveDisabled} aria-label="Save round" onclick={saveRound} disabled={isSaveDisabled}><Save /></button>
+        <button class="icon-btn" aria-label="Close" onclick={onClose}><X /></button>
+      </div>
     </div>
 
     <div class="modal-body form-body">
